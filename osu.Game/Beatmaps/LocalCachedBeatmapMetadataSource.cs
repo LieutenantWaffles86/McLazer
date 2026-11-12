@@ -74,6 +74,8 @@ namespace osu.Game.Beatmaps
         }
 
         public bool Available =>
+            // McLazer: never used. Online state comes from lazer through the sync.
+            !offline_build &&
             // no download in progress.
             cacheDownloadRequest == null
             // cached database exists on disk.

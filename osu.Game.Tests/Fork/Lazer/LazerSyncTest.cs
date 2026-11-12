@@ -245,6 +245,15 @@ namespace osu.Game.Tests.Fork.Lazer
         }
 
         [Test]
+        public void TestUserTagsFollowLazer()
+        {
+            AddStep("sync", () => sync());
+            AddStep("lazer learns user tags", () => lazer.Write(r => r.Find<BeatmapSetInfo>(setId)!.Beatmaps.First().Metadata.UserTags.Add("tech")));
+            AddStep("sync", () => sync());
+            AddAssert("tags copied", () => Realm.Run(r => r.Find<BeatmapSetInfo>(setId)!.Beatmaps.SelectMany(b => b.Metadata.UserTags).Distinct().ToArray()), () => Is.EqualTo(new[] { "tech" }));
+        }
+
+        [Test]
         public void TestSkinsFollowLazer()
         {
             Guid skinId = Guid.Empty;

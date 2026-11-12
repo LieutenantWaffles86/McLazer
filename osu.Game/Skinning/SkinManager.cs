@@ -94,7 +94,7 @@ namespace osu.Game.Skinning
             this.host = host;
             this.resources = resources;
 
-            userFiles = new StorageBackedResourceStore(storage.GetStorageForDirectory("files"));
+            userFiles = new StorageBackedResourceStore(RealmFileStore.WithReadFallback(storage.GetStorageForDirectory("files")));
 
             skinImporter = new SkinImporter(storage, realm, this)
             {

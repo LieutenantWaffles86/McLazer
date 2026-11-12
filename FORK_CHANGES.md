@@ -48,7 +48,7 @@ Hooks marked "offline only" check `api is OfflineAPIAccess`, so upstream tests (
 | `osu.Desktop/Program.cs` | The `--tournament` switch and `TournamentGame` are removed. | The tournament client has its own online API. |
 | `osu.Desktop/osu.Desktop.csproj` | No references to the Catch, Mania, Taiko and Tournament projects. `LegacyIpc/**` is excluded from the build. | osu! standard only: the other rulesets are not shipped. The legacy IPC provider needs all four and is never started. |
 | `osu.Game/Online/TrustedDomainOnlineStore.cs` | `GetLookupUrl` always returns an empty string. | No resource is fetched online: avatars, covers, song previews. One place covers all three stores that use it. |
-| `osu.Game/Beatmaps/LocalCachedBeatmapMetadataSource.cs` | `FetchCache` returns at once (new `offline_build` flag). It has two callers: the constructor and `BackgroundDataStoreProcessor`. | The beatmap-status cache from `assets.ppy.sh` is never downloaded. |
+| `osu.Game/Beatmaps/LocalCachedBeatmapMetadataSource.cs` | New `offline_build` flag: `FetchCache` returns at once (two callers: the constructor and `BackgroundDataStoreProcessor`), and `Available` is always false. | The beatmap-status cache from `assets.ppy.sh` is never downloaded, and no startup job (user tags, ranked dates) runs from an old copy. Lazer's sync supplies that data. |
 | `osu.Game/Screens/Menu/MainMenu.cs` | Offline only: the menu banner does not fetch content, and the supporter display is removed. | The banner request goes straight to `assets.ppy.sh`, not through the API. |
 | `osu.Game/Screens/Menu/ButtonSystem.cs` | Offline only: no Multi, Playlists, Daily Challenge or Browse buttons. | No online play, no beatmap listing. |
 | `osu.Game/Overlays/Toolbar/Toolbar.cs` | Offline only: no news, changelog, wiki, rankings, beatmap listing, chat or social buttons. | Without the buttons, their hotkeys are gone too. |
@@ -78,6 +78,7 @@ Beatmaps, skins, collections and key bindings are copied from a snapshot of laze
 
 | File | What changed | Why |
 | --- | --- | --- |
-| `osu.Game/Database/RealmFileStore.cs` | New static `ReadFallback` storage. When set, the store's storage is wrapped so missing files are read from it. | Beatmap files stay in lazer's `files/` folder. Writes and deletes still only touch McLazer's own folder. |
+| `osu.Game/Database/RealmFileStore.cs` | New static `ReadFallback` storage and `WithReadFallback(files)`. When set, the store's storage is wrapped so missing files are read from it. | Beatmap files stay in lazer's `files/` folder. Writes and deletes still only touch McLazer's own folder. |
 | `osu.Game/OsuGameBase.Importing.cs` | `Import(params string[])` is virtual. | `McLazerGame` refuses every import: drag-and-drop, file arguments and IPC. |
 | `osu.Game/Overlays/FirstRunSetupOverlay.cs` | Adds the `ScreenLazerFolder` step when the game is a `McLazerGame` with no lazer folder linked. | The folder picker. The choice is saved in `mclazer.ini` in McLazer's own folder. |
+| `osu.Game/Skinning/SkinManager.cs`, `osu.Game/Database/LegacyExporter.cs` | Their own `files` storage goes through `RealmFileStore.WithReadFallback`. | Both open the `files` folder themselves, not through `RealmFileStore`. Without this, skins load with no files and look like the default legacy skin. |

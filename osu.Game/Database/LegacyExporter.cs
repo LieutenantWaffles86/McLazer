@@ -49,7 +49,7 @@ namespace osu.Game.Database
         protected LegacyExporter(Storage storage)
         {
             ExportStorage = (storage as OsuStorage)?.GetExportStorage() ?? storage.GetStorageForDirectory(@"exports");
-            UserFileStorage = storage.GetStorageForDirectory(@"files");
+            UserFileStorage = RealmFileStore.WithReadFallback(storage.GetStorageForDirectory(@"files"));
         }
 
         /// <summary>

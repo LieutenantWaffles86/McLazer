@@ -60,6 +60,21 @@ namespace osu.Game.Tests.Fork.Lazer
         }
 
         /// <summary>
+        /// Store a file in lazer's <c>files</c> folder, as lazer would. Returns its hash, for a file record.
+        /// </summary>
+        public string AddFile(string content)
+        {
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(content);
+            string hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            string folder = System.IO.Path.Combine(Path, "files", hash[..1], hash[..2]);
+
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(System.IO.Path.Combine(folder, hash), bytes);
+
+            return hash;
+        }
+
+        /// <summary>
         /// Change lazer's database, as lazer would while running.
         /// </summary>
         public void Write(Action<Realm> action) => use((realm, _) => realm.Write(action));

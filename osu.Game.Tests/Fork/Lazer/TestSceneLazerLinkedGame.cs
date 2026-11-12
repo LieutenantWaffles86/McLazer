@@ -15,6 +15,7 @@ using osu.Framework.Testing;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Fork.Lazer;
+using osu.Game.Models;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Select;
@@ -48,7 +49,13 @@ namespace osu.Game.Tests.Fork.Lazer
                 lazer?.Dispose();
                 lazer = new FakeLazerFolder(host, audio, Resources, Beatmap.Default);
                 lazer.ImportBeatmap();
-                lazer.Write(r => r.Add(new SkinInfo("lazer skin", "someone", typeof(LegacySkin).AssemblyQualifiedName) { ID = lazer_skin }));
+                string skinIni = lazer.AddFile("[General]\nVersion: 2.3\n");
+                lazer.Write(r =>
+                {
+                    var skin = new SkinInfo("lazer skin", "someone", typeof(LegacySkin).AssemblyQualifiedName) { ID = lazer_skin };
+                    skin.Files.Add(new RealmNamedFileUsage(new RealmFile { Hash = skinIni }, "skin.ini"));
+                    r.Add(skin);
+                });
                 File.WriteAllText(Path.Combine(lazer.Path, "game.ini"), $"Token = secret\nSkin = {lazer_skin}\nMenuVoice = False\n");
                 lazerBefore = lazer.Fingerprint();
             });
@@ -100,6 +107,7 @@ namespace osu.Game.Tests.Fork.Lazer
         {
             AddAssert("lazer's setting is in effect", () => Game.LocalConfig.Get<bool>(OsuSetting.MenuVoice), () => Is.False);
             AddUntilStep("lazer's skin is in use", () => Game.SkinManager.CurrentSkinInfo.Value.ID, () => Is.EqualTo(lazer_skin));
+            AddAssert("the skin's files are read from lazer's folder", () => Game.SkinManager.CurrentSkin.Value.Configuration.LegacyVersion, () => Is.EqualTo(2.3m));
             AddAssert("lazer's login token was not copied", () => File.ReadAllText(Game.Storage.GetFullPath("game.ini")), () => Does.Not.Contain("secret").And.Contain("MenuVoice"));
             AddAssert("lazer folder unchanged", () => lazer.Fingerprint(), () => Is.EqualTo(lazerBefore));
         }

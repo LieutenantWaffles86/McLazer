@@ -32,15 +32,16 @@ namespace osu.Game.Database
         /// </summary>
         public static Storage? ReadFallback { get; set; }
 
+        /// <summary>
+        /// McLazer: every reader of the <c>files</c> folder goes through this, so files not found there are read from the linked lazer folder.
+        /// </summary>
+        public static Storage WithReadFallback(Storage files) => ReadFallback == null ? files : new FallbackReadStorage(files, ReadFallback);
+
         public RealmFileStore(RealmAccess realm, Storage storage)
         {
             this.realm = realm;
 
-            Storage = storage.GetStorageForDirectory(@"files");
-
-            // McLazer: files not found here are read from the linked lazer folder.
-            if (ReadFallback != null)
-                Storage = new FallbackReadStorage(Storage, ReadFallback);
+            Storage = WithReadFallback(storage.GetStorageForDirectory(@"files"));
 
             Store = new StorageBackedResourceStore(Storage);
         }

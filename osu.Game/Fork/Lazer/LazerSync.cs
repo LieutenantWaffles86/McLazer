@@ -154,6 +154,14 @@ namespace osu.Game.Fork.Lazer
                 beatmap.LastOnlineUpdate = sourceBeatmap.LastOnlineUpdate;
                 beatmap.StarRating = sourceBeatmap.StarRating;
                 beatmap.Hidden = sourceBeatmap.Hidden;
+
+                if (!beatmap.Metadata.UserTags.SequenceEqual(sourceBeatmap.Metadata.UserTags))
+                {
+                    beatmap.Metadata.UserTags.Clear();
+
+                    foreach (string tag in sourceBeatmap.Metadata.UserTags)
+                        beatmap.Metadata.UserTags.Add(tag);
+                }
             }
         }
 
