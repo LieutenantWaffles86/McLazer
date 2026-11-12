@@ -13,8 +13,14 @@ using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Fork.Lazer;
 using osu.Game.Fork.Offline;
+using osu.Game.Fork.Profiles;
 using osu.Game.Online;
+using osu.Game.Online.API;
+using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
+using osu.Game.Screens;
+using osu.Game.Screens.Menu;
+using osu.Game.Users;
 
 namespace osu.Game.Fork
 {
@@ -35,6 +41,26 @@ namespace osu.Game.Fork
         /// The resolved lazer data folder, or null if none was found.
         /// </summary>
         public string? LinkedLazerFolder { get; private set; }
+
+        public ProfileStore Profiles { get; private set; } = null!;
+
+        private bool profilePickerShown;
+
+        // shortcut: clicking a player does nothing. The online profile overlay only shows failed requests offline. M6 adds a local profile screen.
+        public override void ShowUser(IUser user)
+        {
+        }
+
+        protected override void ScreenChanged(IOsuScreen? current, IOsuScreen? newScreen)
+        {
+            base.ScreenChanged(current, newScreen);
+
+            // With more than one profile, ask who is playing. The main menu is the first screen that allows overlays.
+            if (newScreen is MainMenu && !profilePickerShown && Profiles.Profiles.Count > 1)
+                Schedule(() => Dependencies.Get<LoginOverlay>().Show());
+
+            profilePickerShown |= newScreen is MainMenu;
+        }
 
         /// <summary>
         /// Completes when the startup sync from the lazer folder has finished.
@@ -94,8 +120,32 @@ namespace osu.Game.Fork
         [BackgroundDependencyLoader]
         private void load()
         {
+            var api = (OfflineAPIAccess)API;
+
             // OsuGameBase only adds an APIAccess to the scene graph.
-            Add((OfflineAPIAccess)API);
+            Add(api);
+
+            // The first profile takes the username saved in lazer's settings.
+            Profiles = new ProfileStore(Storage, Dependencies.Get<RealmAccess>(), LocalConfig.Get<string>(OsuSetting.Username));
+            Dependencies.Cache(Profiles);
+
+            // New scores are saved under the local user, so they belong to the active profile.
+            api.LocalUser.Value = Profiles.Active.ToAPIUser();
+            Profiles.Changed += () => Schedule(() =>
+            {
+                var user = Profiles.Active.ToAPIUser();
+
+                if (user.Equals(api.LocalUser.Value))
+                {
+                    if (user.Username == api.LocalUser.Value.Username)
+                        return;
+
+                    // A rename. Users are equal by ID, and TriggerChange() does not reach bound copies, so step through a guest.
+                    api.LocalUser.Value = new GuestUser();
+                }
+
+                api.LocalUser.Value = user;
+            });
         }
 
         protected override void LoadComplete()

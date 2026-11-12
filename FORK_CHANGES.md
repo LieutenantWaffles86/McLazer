@@ -74,7 +74,7 @@ No editors (decided 10 Nov 2026: McLazer is strictly a practice client). All off
 
 Fork code: `osu.Game/Fork/Lazer/` (`LazerFolder`, `LazerSync`, `FallbackReadStorage`, `ScreenLazerFolder`), wired in `osu.Game/Fork/McLazerGame.cs`. Tests: `osu.Game.Tests/Fork/Lazer/`.
 
-Beatmaps, skins, collections and key bindings are copied from a snapshot of lazer's database at each start. Lazer's `game.ini` replaces McLazer's at each start, without the login token. Lazer's `input.json` (mouse, tablet) and `framework.ini` (window, volume, frame limiter) replace McLazer's too, in `McLazerGame.CreateStorage`, before the host loads them. None of this needs a hook. Not done yet: lazer's scores (they need profiles, M3).
+Beatmaps, skins, collections and key bindings are copied from a snapshot of lazer's database at each start. Lazer's `game.ini` replaces McLazer's at each start, without the login token. Lazer's `input.json` (mouse, tablet) and `framework.ini` (window, volume, frame limiter) replace McLazer's too, in `McLazerGame.CreateStorage`, before the host loads them. None of this needs a hook. Not done yet: lazer's scores (they show with the "All profiles" leaderboard, M6).
 
 | File | What changed | Why |
 | --- | --- | --- |
@@ -82,3 +82,15 @@ Beatmaps, skins, collections and key bindings are copied from a snapshot of laze
 | `osu.Game/OsuGameBase.Importing.cs` | `Import(params string[])` is virtual. | `McLazerGame` refuses every import: drag-and-drop, file arguments and IPC. |
 | `osu.Game/Overlays/FirstRunSetupOverlay.cs` | Adds the `ScreenLazerFolder` step when the game is a `McLazerGame` with no lazer folder linked. | The folder picker. The choice is saved in `mclazer.ini` in McLazer's own folder. |
 | `osu.Game/Skinning/SkinManager.cs`, `osu.Game/Database/LegacyExporter.cs` | Their own `files` storage goes through `RealmFileStore.WithReadFallback`. | Both open the `files` folder themselves, not through `RealmFileStore`. Without this, skins load with no files and look like the default legacy skin. |
+
+## M3: profiles
+
+Fork code: `osu.Game/Fork/Profiles/` (`ProfileStore`, `ProfilePanel`), wired in `osu.Game/Fork/McLazerGame.cs`. Tests: `osu.Game.Tests/Fork/Profiles/`.
+
+Profiles live in `profiles.json` in McLazer's own folder. The active profile is the API's local user, so new scores carry its ID with no change to scoring code. IDs start at 2,000,000,000 and are never reused. All hooks are offline only.
+
+| File | What changed | Why |
+| --- | --- | --- |
+| `osu.Game/Overlays/LoginOverlay.cs` | Shows `ProfilePanel` instead of `LoginPanel`. | The toolbar user button opens the profile picker. There is no login. |
+| `osu.Game/Online/Leaderboards/LeaderboardManager.cs` | The Local query also matches `User.OnlineID` to the local user, and a change of local user refetches. | Each profile sees only its own scores. |
+| `osu.Game/OsuGame.cs` | `ShowUser` is virtual. `McLazerGame` overrides it to do nothing. | Clicking a player opened the online profile overlay, which only shows failed requests. |

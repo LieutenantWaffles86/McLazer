@@ -6,6 +6,9 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Effects;
 using osuTK.Graphics;
+using osu.Game.Fork.Offline;
+using osu.Game.Fork.Profiles;
+using osu.Game.Online.API;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Cursor;
@@ -16,7 +19,7 @@ namespace osu.Game.Overlays
 {
     public partial class LoginOverlay : OsuFocusedOverlayContainer
     {
-        private LoginPanel panel = null!;
+        private LoginPanel? panel;
 
         private const float transition_time = 400;
 
@@ -39,8 +42,17 @@ namespace osu.Game.Overlays
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(IAPIProvider api)
         {
+            // McLazer: there is no login. The profile picker takes the form's place.
+            Drawable content = api is OfflineAPIAccess
+                ? new ProfilePanel { RequestHide = Hide }
+                : panel = new LoginPanel
+                {
+                    Padding = new MarginPadding { Vertical = SettingsSection.ITEM_SPACING },
+                    RequestHide = Hide,
+                };
+
             Children = new Drawable[]
             {
                 new OsuContextMenuContainer
@@ -61,11 +73,7 @@ namespace osu.Game.Overlays
                             Masking = true,
                             AutoSizeDuration = transition_time,
                             AutoSizeEasing = Easing.OutQuint,
-                            Child = panel = new LoginPanel
-                            {
-                                Padding = new MarginPadding { Vertical = SettingsSection.ITEM_SPACING },
-                                RequestHide = Hide,
-                            },
+                            Child = content,
                         }
                     }
                 }
@@ -74,10 +82,13 @@ namespace osu.Game.Overlays
 
         protected override void PopIn()
         {
-            panel.Bounding = true;
             this.FadeIn(transition_time, Easing.OutQuint);
             FadeEdgeEffectTo(WaveContainer.SHADOW_OPACITY, WaveContainer.APPEAR_DURATION, Easing.Out);
 
+            if (panel == null)
+                return;
+
+            panel.Bounding = true;
             ScheduleAfterChildren(() => GetContainingFocusManager()!.ChangeFocus(panel));
         }
 
@@ -85,7 +96,9 @@ namespace osu.Game.Overlays
         {
             base.PopOut();
 
-            panel.Bounding = false;
+            if (panel != null)
+                panel.Bounding = false;
+
             this.FadeOut(transition_time);
             FadeEdgeEffectTo(0, WaveContainer.DISAPPEAR_DURATION, Easing.In);
         }

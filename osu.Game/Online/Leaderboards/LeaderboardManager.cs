@@ -13,8 +13,10 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.Extensions;
+using osu.Game.Fork.Offline;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
+using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
@@ -46,6 +48,24 @@ namespace osu.Game.Online.Leaderboards
         [Resolved]
         private RulesetStore rulesets { get; set; } = null!;
 
+        private IBindable<APIUser>? localUser;
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            // McLazer: switching profile changes whose scores the local leaderboard shows.
+            if (api is OfflineAPIAccess)
+            {
+                localUser = api.LocalUser.GetBoundCopy();
+                localUser.BindValueChanged(_ =>
+                {
+                    if (CurrentCriteria != null)
+                        FetchWithCriteria(CurrentCriteria, true);
+                });
+            }
+        }
+
         /// <summary>
         /// Fetch leaderboard content with the new criteria specified in the background.
         /// On completion, <see cref="Scores"/> will be updated with the results from this call (unless a more recent call with a different criteria has completed).
@@ -73,11 +93,15 @@ namespace osu.Game.Online.Leaderboards
             {
                 case BeatmapLeaderboardScope.Local:
                 {
+                    // McLazer: the local leaderboard shows the active profile's scores only.
+                    string profileFilter = api is OfflineAPIAccess ? $" AND User.OnlineID == {api.LocalUser.Value.Id}" : string.Empty;
+
                     localScoreSubscription = realm.RegisterForNotifications(r =>
                         r.All<ScoreInfo>().Filter($"{nameof(ScoreInfo.BeatmapInfo)}.{nameof(BeatmapInfo.ID)} == $0"
                                                   + $" AND {nameof(ScoreInfo.BeatmapInfo)}.{nameof(BeatmapInfo.Hash)} == {nameof(ScoreInfo.BeatmapHash)}"
                                                   + $" AND {nameof(ScoreInfo.Ruleset)}.{nameof(RulesetInfo.ShortName)} == $1"
                                                   + $" AND {nameof(ScoreInfo.DeletePending)} == false"
+                                                  + profileFilter
                             , newCriteria.Beatmap.ID, newCriteria.Ruleset.ShortName), localScoresChanged);
                     return;
                 }
