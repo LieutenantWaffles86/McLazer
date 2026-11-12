@@ -8,12 +8,14 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics;
 using osuTK;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Input.Events;
+using osu.Game.Online.API;
 using osu.Game.Rulesets;
 using osu.Framework.Input.Bindings;
 using osu.Game.Graphics.Containers;
@@ -63,10 +65,13 @@ namespace osu.Game.Overlays.Toolbar
         private Bindable<RulesetInfo> ruleset { get; set; }
 
         [BackgroundDependencyLoader(true)]
-        private void load(OsuGame osuGame)
+        private void load(OsuGame osuGame, IAPIProvider api)
         {
             ToolbarBackground background;
             HoverInterceptor interceptor;
+
+            // McLazer: an offline build has no online overlays. Without the buttons, their hotkeys are gone too.
+            Drawable online(Drawable button) => api is OfflineAPIAccess ? Empty() : button;
 
             Children = new Drawable[]
             {
@@ -162,13 +167,13 @@ namespace osu.Game.Overlays.Toolbar
                                         AutoSizeAxes = Axes.X,
                                         Children = new Drawable[]
                                         {
-                                            new ToolbarNewsButton(),
-                                            new ToolbarChangelogButton(),
-                                            new ToolbarWikiButton(),
-                                            new ToolbarRankingsButton(),
-                                            new ToolbarBeatmapListingButton(),
-                                            new ToolbarChatButton(),
-                                            new ToolbarSocialButton(),
+                                            online(new ToolbarNewsButton()),
+                                            online(new ToolbarChangelogButton()),
+                                            online(new ToolbarWikiButton()),
+                                            online(new ToolbarRankingsButton()),
+                                            online(new ToolbarBeatmapListingButton()),
+                                            online(new ToolbarChatButton()),
+                                            online(new ToolbarSocialButton()),
                                             new ToolbarMusicButton(),
                                             //new ToolbarButton
                                             //{

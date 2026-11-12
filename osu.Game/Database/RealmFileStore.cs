@@ -9,6 +9,7 @@ using osu.Framework.IO.Stores;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game.Extensions;
+using osu.Game.Fork.Lazer;
 using osu.Game.IO;
 using osu.Game.Models;
 using Realms;
@@ -26,11 +27,21 @@ namespace osu.Game.Database
 
         public readonly Storage Storage;
 
+        /// <summary>
+        /// McLazer: the <c>files</c> folder of the linked lazer install. Only ever read.
+        /// </summary>
+        public static Storage? ReadFallback { get; set; }
+
         public RealmFileStore(RealmAccess realm, Storage storage)
         {
             this.realm = realm;
 
             Storage = storage.GetStorageForDirectory(@"files");
+
+            // McLazer: files not found here are read from the linked lazer folder.
+            if (ReadFallback != null)
+                Storage = new FallbackReadStorage(Storage, ReadFallback);
+
             Store = new StorageBackedResourceStore(Storage);
         }
 

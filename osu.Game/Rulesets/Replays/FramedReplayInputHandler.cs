@@ -164,6 +164,13 @@ namespace osu.Game.Rulesets.Replays
             return inImportantSection && frameStart < time && time < frameEnd ? null : CurrentTime;
         }
 
+        // McLazer: see ReplayInputHandler.StartFrom.
+        public override void StartFrom(double time)
+        {
+            currentFrameIndex = Frames.FindLastIndex(f => f.Time <= time);
+            CurrentTime = time;
+        }
+
         private double getFrameTime(int index)
         {
             if (index < 0)

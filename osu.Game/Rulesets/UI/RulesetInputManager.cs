@@ -48,7 +48,8 @@ namespace osu.Game.Rulesets.UI
                 if (value != null && recorder != null)
                     throw new InvalidOperationException("Cannot attach more than one recorder");
 
-                recorder?.Expire();
+                // McLazer: Expire() ends the lifetime at the current time, so a rewind would bring the recorder back to life.
+                recorder?.LifetimeEnd = double.MinValue;
                 recorder = value;
 
                 if (recorder != null)

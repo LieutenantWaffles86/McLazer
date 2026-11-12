@@ -20,6 +20,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables;
 using osu.Game.Collections;
 using osu.Game.Database;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Carousel;
 using osu.Game.Graphics.Sprites;
@@ -238,7 +239,7 @@ namespace osu.Game.Screens.Select
 
                 if (Expanded.Value)
                 {
-                    if (songSelect is SoloSongSelect soloSongSelect)
+                    if (songSelect is SoloSongSelect soloSongSelect && api is not OfflineAPIAccess) // McLazer: no editors.
                     {
                         // Assume the current set has one of its beatmaps selected since it is expanded.
                         items.Add(new OsuMenuItem(ButtonSystemStrings.Edit.ToSentence(), MenuItemType.Standard, () => soloSongSelect.Edit(soloSongSelect.Beatmap.Value.BeatmapInfo))

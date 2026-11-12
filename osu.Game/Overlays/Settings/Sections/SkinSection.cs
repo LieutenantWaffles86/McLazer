@@ -18,10 +18,12 @@ using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Localisation;
 using osu.Framework.Logging;
 using osu.Game.Database;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Localisation;
+using osu.Game.Online.API;
 using osu.Game.Overlays.Dialog;
 using osu.Game.Overlays.SkinEditor;
 using osu.Game.Skinning;
@@ -55,7 +57,7 @@ namespace osu.Game.Overlays.Settings.Sections
         private IDisposable realmSubscription;
 
         [BackgroundDependencyLoader(permitNulls: true)]
-        private void load([CanBeNull] SkinEditorOverlay skinEditor)
+        private void load([CanBeNull] SkinEditorOverlay skinEditor, IAPIProvider api)
         {
             Children = new Drawable[]
             {
@@ -84,6 +86,7 @@ namespace osu.Game.Overlays.Settings.Sections
                 {
                     Text = SkinSettingsStrings.SkinLayoutEditor,
                     Action = () => skinEditor?.ToggleVisibility(),
+                    Alpha = api is OfflineAPIAccess ? 0 : 1, // McLazer: no editors.
                 },
             };
         }

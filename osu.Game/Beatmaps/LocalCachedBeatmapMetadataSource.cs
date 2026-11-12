@@ -168,11 +168,14 @@ namespace osu.Game.Beatmaps
         /// <summary>
         /// Force an immediate fetch of the latest cache database.
         /// </summary>
+        // McLazer: offline build. The cache (assets.ppy.sh) is never downloaded, whoever asks.
+        private static readonly bool offline_build = true;
+
         public Task FetchCache()
         {
             // This is guarded in the local call, but also included as a safety
             // for any incorrect public usage.
-            if (DebugUtils.IsNUnitRunning)
+            if (offline_build || DebugUtils.IsNUnitRunning)
                 return Task.CompletedTask;
 
             bool isRefetch = storage.Exists(cache_database_name);

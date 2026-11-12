@@ -10,9 +10,11 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osu.Game.Configuration;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Localisation;
+using osu.Game.Online.API;
 using osu.Game.Online.Leaderboards;
 using osu.Game.Screens.Play.Leaderboards;
 using osuTK;
@@ -42,9 +44,14 @@ namespace osu.Game.Screens.Select
 
             public IBindable<bool> FilterBySelectedMods => selectedModsToggle.Active;
 
+            // McLazer: an offline build only has the Local leaderboard.
+            private bool localScopeOnly;
+
             [BackgroundDependencyLoader]
-            private void load(OsuConfigManager config)
+            private void load(OsuConfigManager config, IAPIProvider api)
             {
+                localScopeOnly = api is OfflineAPIAccess;
+
                 InternalChildren = new Drawable[]
                 {
                     new Container
@@ -105,6 +112,12 @@ namespace osu.Game.Screens.Select
                     },
                 };
 
+                if (localScopeOnly)
+                {
+                    scopeDropdown.Current.Value = BeatmapLeaderboardScope.Local;
+                    scopeDropdown.Items = new[] { BeatmapLeaderboardScope.Local };
+                }
+
                 config.BindWith(OsuSetting.BeatmapDetailTab, configDetailTab);
                 config.BindWith(OsuSetting.BeatmapLeaderboardSortMode, configLeaderboardSortMode);
                 config.BindWith(OsuSetting.BeatmapDetailModsFilter, selectedModsToggle.Active);
@@ -114,7 +127,8 @@ namespace osu.Game.Screens.Select
             {
                 base.LoadComplete();
 
-                scopeDropdown.Current.Value = tryMapDetailTabToLeaderboardScope(configDetailTab.Value) ?? scopeDropdown.Current.Value;
+                if (!localScopeOnly)
+                    scopeDropdown.Current.Value = tryMapDetailTabToLeaderboardScope(configDetailTab.Value) ?? scopeDropdown.Current.Value;
                 scopeDropdown.Current.BindValueChanged(_ => updateConfigDetailTab());
 
                 tabControl.Current.Value = configDetailTab.Value == BeatmapDetailTab.Details ? Selection.Details : Selection.Ranking;

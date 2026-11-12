@@ -13,6 +13,7 @@ using osu.Game;
 using osu.Desktop.Updater;
 using osu.Framework;
 using osu.Framework.Logging;
+using osu.Game.Fork;
 using osu.Game.Updater;
 using osu.Desktop.MacOS;
 using osu.Desktop.Windows;
@@ -25,7 +26,7 @@ using osu.Game.Utils;
 
 namespace osu.Desktop
 {
-    internal partial class OsuGameDesktop : OsuGame
+    internal partial class OsuGameDesktop : McLazerGame // McLazer: the fork's wiring lives in McLazerGame.
     {
         private OsuSchemeLinkIPCChannel? osuSchemeLinkIPCChannel;
         private ArchiveImportIPCChannel? archiveImportIPCChannel;
@@ -104,7 +105,8 @@ namespace osu.Desktop
                 return key?.OpenSubKey(WindowsAssociationManager.SHELL_OPEN_COMMAND)?.GetValue(string.Empty)?.ToString()?.Split('"')[1].Replace("osu!.exe", "");
         }
 
-        public static bool IsPackageManaged => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OSU_EXTERNAL_UPDATE_PROVIDER"));
+        // McLazer: never self-update. This also skips Velopack setup in Program.cs.
+        public static bool IsPackageManaged => true;
 
         protected override UpdateManager CreateUpdateManager()
         {
@@ -117,7 +119,7 @@ namespace osu.Desktop
                 LocalConfig.SetValue(OsuSetting.ReleaseStream, Version.Contains("-tachyon") ? ReleaseStream.Tachyon : ReleaseStream.Lazer);
 
             if (IsPackageManaged)
-                return new NoActionUpdateManager();
+                return new UpdateManager(); // McLazer: NoActionUpdateManager would still poll GitHub for releases.
 
             return new VelopackUpdateManager();
         }
@@ -143,7 +145,7 @@ namespace osu.Desktop
 
             base.LoadComplete();
 
-            LoadComponentAsync(new DiscordRichPresence(), Add);
+            // McLazer: no Discord rich presence. It would publish activity through Discord under osu!'s application ID.
 
             switch (RuntimeInfo.OS)
             {
@@ -170,7 +172,7 @@ namespace osu.Desktop
             // Apple operating systems use a better icon provided via external assets.
             if (!RuntimeInfo.IsApple)
             {
-                var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(GetType(), "lazer.ico");
+                var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(GetType(), "mclazer.ico");
                 if (iconStream != null)
                     host.Window.SetIconFromStream(iconStream);
             }

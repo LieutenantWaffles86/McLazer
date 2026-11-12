@@ -4,7 +4,6 @@
 using System;
 using System.IO;
 using System.Runtime.Versioning;
-using osu.Desktop.LegacyIpc;
 using osu.Desktop.Windows;
 using osu.Framework;
 using osu.Framework.Development;
@@ -12,7 +11,6 @@ using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game;
 using osu.Game.IPC;
-using osu.Game.Tournament;
 using SDL;
 using Velopack;
 
@@ -21,18 +19,19 @@ namespace osu.Desktop
     public static class Program
     {
 #if DEBUG
-        private const string base_game_name = @"osu-development";
+        private const string base_game_name = @"mclazer-development";
 #else
-        private const string base_game_name = @"osu";
+        private const string base_game_name = @"mclazer";
 #endif
-
-        private static LegacyTcpIpcProvider? legacyIpc;
 
         private static bool isFirstRun;
 
         [STAThread]
         public static void Main(string[] args)
         {
+            // McLazer: never report crashes to ppy's Sentry. SentryLogger checks this before initialising.
+            Environment.SetEnvironmentVariable("OSU_DISABLE_ERROR_REPORTING", "1");
+
             // IMPORTANT DON'T IGNORE: For general sanity, velopack's setup needs to run before anything else.
             // This has bitten us in the rear before (bricked updater), and although the underlying issue from
             // last time has been fixed, let's not tempt fate.
@@ -75,7 +74,6 @@ namespace osu.Desktop
             string cwd = Environment.CurrentDirectory;
 
             string gameName = base_game_name;
-            bool tournamentClient = false;
 
             foreach (string arg in args)
             {
@@ -86,10 +84,6 @@ namespace osu.Desktop
 
                 switch (key)
                 {
-                    case "--tournament":
-                        tournamentClient = true;
-                        break;
-
                     case "--debug-client-id":
                         if (!DebugUtils.IsDebugBuild)
                             throw new InvalidOperationException("Cannot use this argument in a non-debug build.");
@@ -104,7 +98,7 @@ namespace osu.Desktop
 
             var hostOptions = new HostOptions
             {
-                IPCPipeName = !tournamentClient ? OsuGame.IPC_PIPE_NAME : null,
+                IPCPipeName = OsuGame.IPC_PIPE_NAME,
                 FriendlyGameName = OsuGameBase.GAME_NAME,
             };
 
@@ -123,30 +117,14 @@ namespace osu.Desktop
                     }
                 }
 
-                if (host.IsPrimaryInstance)
-                {
-                    try
-                    {
-                        Logger.Log("Starting legacy IPC provider...");
-                        legacyIpc = new LegacyTcpIpcProvider();
-                        legacyIpc.Bind();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error(ex, "Failed to start legacy IPC provider");
-                    }
-                }
+                // McLazer: the legacy IPC provider (TCP port 45357, osu!stable <-> lazer) is not started. Binding it would take the port from a running lazer.
 
-                if (tournamentClient)
-                    host.Run(new TournamentGame());
-                else
+                // McLazer: there is no tournament client. It has its own online API.
+                host.Run(new OsuGameDesktop(args)
                 {
-                    host.Run(new OsuGameDesktop(args)
-                    {
-                        IsFirstRun = isFirstRun,
-                        EnableWebSocketServer = Environment.GetEnvironmentVariable("OSU_WEBSOCKET_SERVER") == "1",
-                    });
-                }
+                    IsFirstRun = isFirstRun,
+                    EnableWebSocketServer = Environment.GetEnvironmentVariable("OSU_WEBSOCKET_SERVER") == "1",
+                });
             }
         }
 

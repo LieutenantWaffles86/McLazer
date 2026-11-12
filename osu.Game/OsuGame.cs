@@ -39,6 +39,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Collections;
 using osu.Game.Configuration;
 using osu.Game.Database;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterface;
@@ -100,9 +101,9 @@ namespace osu.Game
     {
 #if DEBUG
         // Different port allows running release and debug builds alongside each other.
-        public const string IPC_PIPE_NAME = "osu-lazer-debug";
+        public const string IPC_PIPE_NAME = "mclazer-debug";
 #else
-        public const string IPC_PIPE_NAME = "osu-lazer";
+        public const string IPC_PIPE_NAME = "mclazer";
 #endif
 
         /// <summary>
@@ -1642,6 +1643,10 @@ namespace osu.Game
                     return true;
 
                 case GlobalAction.ToggleSkinEditor:
+                    // McLazer: a practice client has no editors.
+                    if (API is OfflineAPIAccess)
+                        return false;
+
                     skinEditor.ToggleVisibility();
                     return true;
 

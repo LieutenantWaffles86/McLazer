@@ -1031,7 +1031,7 @@ namespace osu.Game.Screens.Play
 
         #region Pause Logic
 
-        public bool IsResuming { get; private set; }
+        public bool IsResuming { get; protected set; } // McLazer: protected, so a practice seek can cancel a resume in progress.
 
         /// <summary>
         /// The amount of gameplay time after which a second pause is allowed.

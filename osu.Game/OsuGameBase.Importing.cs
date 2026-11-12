@@ -25,7 +25,7 @@ namespace osu.Game
         /// <param name="handler">The previously registered handler.</param>
         public void UnregisterImportHandler(ICanAcceptFiles handler) => fileImporters.Remove(handler);
 
-        public async Task Import(params string[] paths)
+        public virtual async Task Import(params string[] paths) // McLazer: virtual, so the fork can refuse imports.
         {
             if (paths.Length == 0)
                 return;

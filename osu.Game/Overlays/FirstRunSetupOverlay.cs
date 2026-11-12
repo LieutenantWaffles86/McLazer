@@ -6,7 +6,11 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics.Sprites;
 using osu.Game.Configuration;
 using osu.Game.Database;
+using osu.Game.Fork;
+using osu.Game.Fork.Lazer;
+using osu.Game.Fork.Offline;
 using osu.Game.Localisation;
+using osu.Game.Online.API;
 using osu.Game.Overlays.FirstRunSetup;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Screens;
@@ -34,12 +38,19 @@ namespace osu.Game.Overlays
         }
 
         [BackgroundDependencyLoader(permitNulls: true)]
-        private void load(LegacyImportManager? legacyImportManager)
+        private void load(LegacyImportManager? legacyImportManager, IAPIProvider api, OsuGameBase game)
         {
+            // McLazer: beatmaps come from the linked lazer folder, so the download and import steps are skipped.
+            bool offline = api is OfflineAPIAccess;
+
             AddStep<ScreenWelcome>();
+            // McLazer: with no lazer folder found, ask for it.
+            if (game is McLazerGame { LinkedLazerFolder: null })
+                AddStep<ScreenLazerFolder>();
             AddStep<ScreenUIScale>();
-            AddStep<ScreenBeatmaps>();
-            if (legacyImportManager?.SupportsImportFromStable == true)
+            if (!offline)
+                AddStep<ScreenBeatmaps>();
+            if (!offline && legacyImportManager?.SupportsImportFromStable == true)
                 AddStep<ScreenImportFromStable>();
             AddStep<ScreenBehaviour>();
 

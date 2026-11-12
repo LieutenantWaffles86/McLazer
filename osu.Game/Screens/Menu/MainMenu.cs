@@ -23,6 +23,7 @@ using osu.Framework.Threading;
 using osu.Game.Audio;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
+using osu.Game.Fork.Offline;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Input.Bindings;
@@ -206,6 +207,7 @@ namespace osu.Game.Screens.Menu
                         {
                             Anchor = Anchor.TopCentre,
                             Origin = Anchor.TopCentre,
+                            FetchOnlineContent = api is not OfflineAPIAccess, // McLazer
                         }
                     }
                 },
@@ -217,6 +219,10 @@ namespace osu.Game.Screens.Menu
                 },
                 holdToExitGameOverlay?.CreateProxy() ?? Empty()
             });
+
+            // McLazer: no supporter prompt in an offline build.
+            if (api is OfflineAPIAccess)
+                supporterDisplay.Expire();
 
             float baseDim = SeasonalUIConfig.ENABLED ? 0.84f : 1;
 

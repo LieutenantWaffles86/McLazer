@@ -33,6 +33,13 @@ namespace osu.Game.Input.Handlers
         /// <returns>The usable time value. If null, we should not advance time as we do not have enough data.</returns>
         public abstract double? SetFrameFromTime(double time);
 
+        /// <summary>
+        /// McLazer: start playback at a time, without first walking there from the start of the replay.
+        /// </summary>
+        public virtual void StartFrom(double time)
+        {
+        }
+
         public override bool Initialize(GameHost host) => true;
 
         public class ReplayState<T> : IInput

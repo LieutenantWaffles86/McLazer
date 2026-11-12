@@ -11,6 +11,8 @@ using osu.Framework.Extensions.LocalisationExtensions;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Screens;
 using osu.Game.Beatmaps;
+using osu.Game.Fork.Offline;
+using osu.Game.Fork.Practice;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Localisation;
 using osu.Game.Online.API;
@@ -64,7 +66,8 @@ namespace osu.Game.Screens.Select
         public override IEnumerable<OsuMenuItem> GetForwardActions(BeatmapInfo beatmap)
         {
             yield return new OsuMenuItem(ButtonSystemStrings.Play.ToSentence(), MenuItemType.Highlighted, () => SelectAndRun(beatmap, OnStart)) { Icon = FontAwesome.Solid.Check };
-            yield return new OsuMenuItem(ButtonSystemStrings.Edit.ToSentence(), MenuItemType.Standard, () => Edit(beatmap)) { Icon = FontAwesome.Solid.PencilAlt };
+            if (api is not OfflineAPIAccess) // McLazer: no editors.
+                yield return new OsuMenuItem(ButtonSystemStrings.Edit.ToSentence(), MenuItemType.Standard, () => Edit(beatmap)) { Icon = FontAwesome.Solid.PencilAlt };
 
             yield return new OsuMenuItemSpacer();
 
@@ -139,7 +142,7 @@ namespace osu.Game.Screens.Select
                 }
                 else
                 {
-                    player = new SoloPlayer();
+                    player = new PracticePlayer(); // McLazer: all local play goes through PracticePlayer.
                 }
 
                 return player;
@@ -148,7 +151,8 @@ namespace osu.Game.Screens.Select
 
         public void Edit(BeatmapInfo beatmap)
         {
-            if (!this.IsCurrentScreen())
+            // McLazer: no editors. Every route into the beatmap editor from song select ends here.
+            if (!this.IsCurrentScreen() || api is OfflineAPIAccess)
                 return;
 
             SelectAndRun(beatmap, () => this.Push(new EditorLoader()));

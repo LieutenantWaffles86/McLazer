@@ -78,9 +78,9 @@ namespace osu.Game
     public partial class OsuGameBase : Framework.Game, ICanAcceptFiles, IBeatSyncProvider
     {
 #if DEBUG
-        public const string GAME_NAME = "osu! (development)";
+        public const string GAME_NAME = "McLazer (development)";
 #else
-        public const string GAME_NAME = "osu!";
+        public const string GAME_NAME = "McLazer";
 #endif
 
         public const string OSU_PROTOCOL = "osu://";
@@ -278,6 +278,8 @@ namespace osu.Game
                 VersionHash = $"{Version}-{RuntimeInfo.OS}".ComputeMD5Hash();
             }
 
+            // McLazer: fork assets in osu.Game/Resources. Added first, so they replace upstream resources of the same name.
+            Resources.AddStore(new NamespacedResourceStore<byte[]>(new DllResourceStore(typeof(OsuGameBase).Assembly), @"Resources"));
             Resources.AddStore(new DllResourceStore(OsuResources.ResourceAssembly));
 
             dependencies.Cache(realm = new RealmAccess(Storage, CLIENT_DATABASE_FILENAME, Host.UpdateThread));
