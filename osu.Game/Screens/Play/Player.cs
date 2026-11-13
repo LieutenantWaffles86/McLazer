@@ -737,12 +737,12 @@ namespace osu.Game.Screens.Play
         /// Seek to a specific time in gameplay.
         /// </summary>
         /// <param name="time">The destination time to seek to.</param>
-        public virtual void Seek(double time) => GameplayClockContainer.Seek(time); // McLazer: virtual, so a practice run's seeks go through its seek session.
+        public void Seek(double time) => GameplayClockContainer.Seek(time);
 
         /// <summary>
         /// Whether the progress bar can seek. By default, only while a replay is loaded.
         /// </summary>
-        public virtual IBindable<bool> SeekingAllowed => DrawableRuleset.HasReplayLoaded; // McLazer: new, so a practice run can seek too.
+        public virtual IBindable<bool> SeekingAllowed => DrawableRuleset.HasReplayLoaded; // McLazer: new, so a practice run can turn it off.
 
         private ScheduledDelegate frameStablePlaybackResetDelegate;
 

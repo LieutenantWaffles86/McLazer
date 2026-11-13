@@ -80,6 +80,9 @@ namespace osu.Game.Rulesets.UI
             if (!important && last != null && Time.Current - last.Time < (1000d / RecordFrameRate) * Clock.Rate)
                 return;
 
+            // McLazer: a practice seek attaches a recorder mid-run, and a hit can come before its LoadComplete.
+            inputManager ??= GetContainingInputManager();
+
             var position = ScreenSpaceToGamefield?.Invoke(inputManager.CurrentState.Mouse.Position) ?? inputManager.CurrentState.Mouse.Position;
 
             var frame = HandleFrame(position, pressedActions, last);

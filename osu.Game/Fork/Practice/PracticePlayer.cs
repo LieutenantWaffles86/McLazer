@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
-using osu.Framework.Input;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
 using osu.Game.Beatmaps;
@@ -17,7 +16,6 @@ using osu.Game.Online.API;
 using osu.Game.Online.Rooms;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
-using osu.Game.Screens.Play.HUD;
 using osuTK.Input;
 
 namespace osu.Game.Fork.Practice
@@ -39,19 +37,17 @@ namespace osu.Game.Fork.Practice
         /// <summary>
         /// Whether this run is a practice run. Once set, it stays set for the run.
         /// </summary>
-        public bool IsPractice => isPractice.Value;
+        public bool IsPractice { get; private set; }
 
-        private readonly BindableBool isPractice = new BindableBool();
-
-        // Only practice runs seek from the progress bar. In a normal run, a stray click there would throw away the run's score.
-        public override IBindable<bool> SeekingAllowed => isPractice;
+        // The progress bar never seeks: it is optional and skins can leave it out. Seeks come from keys only.
+        // Upstream turns it on while a replay is loaded, which a seek session is.
+        public override IBindable<bool> SeekingAllowed { get; } = new BindableBool();
 
         protected SeekSession SeekSession { get; private set; } = null!;
 
         private bool resumeOnArrival;
         private OsuSpriteText seekingText = null!;
         private double seekingFor;
-        private InputManager inputManager = null!;
 
         public PracticePlayer(PlayerConfiguration? configuration = null)
             : base(configuration)
@@ -73,12 +69,6 @@ namespace osu.Game.Fork.Practice
                 Font = OsuFont.GetFont(size: 30, weight: FontWeight.Bold),
                 Alpha = 0,
             });
-        }
-
-        protected override void LoadComplete()
-        {
-            base.LoadComplete();
-            inputManager = GetContainingInputManager()!;
         }
 
         // With no token, SubmittingPlayer skips score submission. Everything it does locally still runs.
@@ -123,9 +113,6 @@ namespace osu.Game.Fork.Practice
             Resume();
         }
 
-        // The progress bar seeks through here.
-        public override void Seek(double time) => PracticeSeek(time, true);
-
         public bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
         {
             if (!LoadedBeatmapSuccessfully)
@@ -161,9 +148,8 @@ namespace osu.Game.Fork.Practice
             seekingFor = SeekSession.IsSeeking ? seekingFor + Time.Elapsed : 0;
             seekingText.Alpha = seekingFor > 200 ? 1 : 0;
 
-            // While the progress bar is dragged, stay at each target, so the player can scrub over their own attempt.
             // Resume here, before children update: the recorder that Commit adds must load before the next input arrives.
-            if (resumeOnArrival && !SeekSession.IsSeeking && inputManager.DraggedDrawable is not SongProgressBar)
+            if (resumeOnArrival)
                 ResumeFromSeek();
         }
 
@@ -188,7 +174,7 @@ namespace osu.Game.Fork.Practice
             if (IsPractice)
                 return;
 
-            isPractice.Value = true;
+            IsPractice = true;
 
             // A practice run stays in gameplay when the last object is judged, and its score is never imported.
             Configuration.ShowResults = false;

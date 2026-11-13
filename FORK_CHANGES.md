@@ -104,6 +104,6 @@ Left and Right seek 5 s through the replay seek bindings (`GlobalAction.SeekRepl
 
 | File | What changed | Why |
 | --- | --- | --- |
-| `osu.Game/Screens/Play/Player.cs` | `Seek` is virtual. | The progress bar calls `Player.Seek`. `PracticePlayer` sends it through its seek session. |
-| `osu.Game/Screens/Play/Player.cs` | New virtual `SeekingAllowed`, by default `DrawableRuleset.HasReplayLoaded`. | `PracticePlayer` allows seeking for the rest of a practice run. |
+| `osu.Game/Screens/Play/Player.cs` | New virtual `SeekingAllowed`, by default `DrawableRuleset.HasReplayLoaded`. | `PracticePlayer` turns progress bar seeking off. The bar is optional and skins can leave it out, so seeks come from keys only. Upstream would turn it on during every seek session, because a replay is loaded then. |
 | `osu.Game/Screens/Play/HUD/SongProgress.cs` | `Interactive` binds to `player.SeekingAllowed` instead of `drawableRuleset.HasReplayLoaded`. | Same. Upstream players keep the old behaviour through the default. |
+| `osu.Game/Rulesets/UI/ReplayRecorder.cs` | `RecordFrame` finds its input manager itself if `LoadComplete` has not run yet. | After a seek, the recorder is attached mid-run. A hit in that same frame recorded a frame before `LoadComplete` and crashed. |

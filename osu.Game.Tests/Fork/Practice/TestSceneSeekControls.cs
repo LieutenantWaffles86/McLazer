@@ -4,14 +4,13 @@
 using System.Linq;
 using NUnit.Framework;
 using osu.Framework.Testing;
-using osu.Game.Fork.Practice;
 using osu.Game.Screens.Play.HUD;
 using osuTK.Input;
 
 namespace osu.Game.Tests.Fork.Practice
 {
     /// <summary>
-    /// The ways a player starts a seek: the seek keys and the progress bar.
+    /// Seeks come from keys. The progress bar is optional (skins can leave it out), so it never seeks.
     /// </summary>
     [HeadlessTest]
     public partial class TestSceneSeekControls : PracticePlayerTestScene
@@ -19,14 +18,20 @@ namespace osu.Game.Tests.Fork.Practice
         [Test]
         public void TestSeekKeys()
         {
+            int reverted = 0;
+
             LoadPlayer();
 
-            AtTime(GapAfter(8), "press the seek back key", () => InputManager.Key(Key.Left));
+            AtTime(GapAfter(8), "press the seek back key", () =>
+            {
+                Player.ScoreProcessor.JudgementReverted += _ => reverted++;
+                InputManager.Key(Key.Left);
+            });
             AddUntilStep("run is practice", () => Player.IsPractice);
             WaitForResume();
 
-            // The key went back 5 s from 4,850 ms, to before the first circle.
-            AddAssert("back before the first circle", () => CaptureState().JudgedHits, () => Is.Zero);
+            // The key went back 5 s from 4,850 ms, to before the first circle. Live play goes on from there, so count undone judgements instead of judged ones.
+            AddAssert("back before the first circle", () => reverted, () => Is.EqualTo(9));
 
             AtTime(GapAfter(0), "press the seek forward key", () => InputManager.Key(Key.Right));
 
@@ -36,58 +41,18 @@ namespace osu.Game.Tests.Fork.Practice
         }
 
         [Test]
-        public void TestProgressBarSeeksInPracticeOnly()
+        public void TestProgressBarNeverSeeks()
         {
-            bool sessionStarted = false;
-
             LoadPlayer();
 
             AddAssert("progress bar not interactive in a normal run", () => progressBar.Interactive, () => Is.False);
 
-            AtTime(GapAfter(3), "rewind", () => Player.PracticeSeek(GapAfter(0), true));
-            WaitForResume();
+            AtTime(GapAfter(3), "rewind", () => Player.PracticeSeek(GapAfter(0)));
+            WaitForSeek();
 
-            AddAssert("progress bar interactive in practice", () => progressBar.Interactive);
-
-            AtTime(GapAfter(2), "seek from the progress bar", () =>
-            {
-                Player.Seek(GapAfter(0));
-                sessionStarted = Player.SeekSession.IsActive;
-            });
-            AddAssert("seek went through the seek session", () => sessionStarted);
-            WaitForResume();
-        }
-
-        [Test]
-        public void TestDraggingProgressBarHolds()
-        {
-            int frameCount = 0;
-
-            LoadPlayer();
-
-            AtTime(GapAfter(3), "rewind", () => Player.PracticeSeek(GapAfter(0), true));
-            WaitForResume();
-
-            // The bot moves the mouse every frame. Stop it between circles, when it holds no key.
-            AtTime(GapAfter(2), "stop the bot", () => Bot.Player = null);
-
-            AddStep("drag along the progress bar", () =>
-            {
-                frameCount = Player.Score.Replay.Frames.Count;
-                InputManager.MoveMouseTo(progressBar.ToScreenSpace(progressBar.LayoutRectangle.Centre));
-                InputManager.PressButton(MouseButton.Left);
-                InputManager.MoveMouseTo(progressBar.ToScreenSpace(progressBar.LayoutRectangle.Centre + new osuTK.Vector2(-progressBar.DrawWidth / 4, 0)));
-            });
-
-            AddUntilStep("seek started", () => Player.SeekSession.IsActive);
-            AddUntilStep("seek arrived", () => !Player.SeekSession.IsSeeking);
-            AddWaitStep("hold the drag", 5);
-            AddAssert("still in the seek session", () => Player.SeekSession.IsActive);
-            AddAssert("gameplay still paused", () => Player.GameplayClockContainer.IsPaused.Value);
-
-            AddStep("release", () => InputManager.ReleaseButton(MouseButton.Left));
-            WaitForResume();
-            AddAssert("recording was cut at the drag target", () => Player.Score.Replay.Frames.Count, () => Is.LessThan(frameCount));
+            // Upstream makes it interactive whenever a replay is loaded, as it is during a seek session.
+            AddAssert("replay attached", () => Player.DrawableRuleset.HasReplayLoaded.Value);
+            AddAssert("progress bar not interactive while seeking", () => progressBar.Interactive, () => Is.False);
         }
 
         private SongProgressBar progressBar => Player.HUDOverlay.ChildrenOfType<SongProgressBar>().First();
