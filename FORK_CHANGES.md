@@ -147,3 +147,9 @@ Tests: `osu.Game.Tests/Fork/Practice/TestSceneSeekWithMods.cs` rewinds with HR, 
 | File | What changed | Why |
 | --- | --- | --- |
 | `osu.Game.Rulesets.Osu/Mods/OsuModRepel.cs`, `osu.Game.Rulesets.Osu/Mods/OsuModMagnetised.cs` | Objects do not move in a frame where gameplay time stands still or runs backwards. | Damping with negative time pushed objects away without limit during rewinds. Repel also crashed with a NaN position when the cursor sat exactly on an object in a frame with no time. |
+
+## M8: packaging
+
+`package-linux.sh` builds a self-contained 64-bit Linux McLazer into `dist/McLazer-linux-x64.tar.gz` (ignored by git), with a `.desktop` file and `install.sh`, which installs to `~/.local/opt/McLazer` and adds McLazer to the application menu. No .NET install is needed to run it. Only the osu! ruleset is shipped.
+
+Lazer's `Version` line is no longer copied with its `game.ini`: McLazer keeps its own, so it does not post "updated" whenever lazer's version differs (`McLazerGame.borrowLazerSettings`). No upstream file changed.

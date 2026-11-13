@@ -106,18 +106,28 @@ namespace osu.Game.Fork
         /// </summary>
         private static void borrowLazerSettings(string lazerFolder, string ownFolder)
         {
-            // shortcut: lazer's version setting comes along, so a packaged McLazer would post "updated" at every start. Drop that line when packaging (M8).
+            string ownFile = Path.Combine(ownFolder, @"game.ini");
+
             try
             {
+                // McLazer keeps its own last-run version. With lazer's, it would post "updated" whenever the two differ.
+                string? ownVersion = File.Exists(ownFile) ? File.ReadLines(ownFile).FirstOrDefault(isVersion) : null;
+
                 // Lazer's login token must not leave lazer's folder. McLazer never logs in.
-                File.WriteAllLines(Path.Combine(ownFolder, @"game.ini"),
-                    File.ReadLines(Path.Combine(lazerFolder, @"game.ini")).Where(line => !line.StartsWith(@"Token", StringComparison.Ordinal)));
+                var lines = File.ReadLines(Path.Combine(lazerFolder, @"game.ini")).Where(line => !line.StartsWith(@"Token", StringComparison.Ordinal) && !isVersion(line)).ToList();
+
+                if (ownVersion != null)
+                    lines.Add(ownVersion);
+
+                File.WriteAllLines(ownFile, lines);
             }
             catch (Exception e)
             {
                 // No settings file in lazer's folder, or it is unreadable: keep McLazer's last copy.
                 Logger.Log($@"Could not read lazer's settings: {e.Message}");
             }
+
+            static bool isVersion(string line) => line.Split('=')[0].Trim() == nameof(OsuSetting.Version);
         }
 
         [BackgroundDependencyLoader]

@@ -56,7 +56,7 @@ namespace osu.Game.Tests.Fork.Lazer
                     skin.Files.Add(new RealmNamedFileUsage(new RealmFile { Hash = skinIni }, "skin.ini"));
                     r.Add(skin);
                 });
-                File.WriteAllText(Path.Combine(lazer.Path, "game.ini"), $"Token = secret\nSkin = {lazer_skin}\nMenuVoice = False\n");
+                File.WriteAllText(Path.Combine(lazer.Path, "game.ini"), $"Token = secret\nVersion = 2099.1.1-lazer\nSkin = {lazer_skin}\nMenuVoice = False\n");
                 lazerBefore = lazer.Fingerprint();
             });
 
@@ -109,6 +109,7 @@ namespace osu.Game.Tests.Fork.Lazer
             AddUntilStep("lazer's skin is in use", () => Game.SkinManager.CurrentSkinInfo.Value.ID, () => Is.EqualTo(lazer_skin));
             AddAssert("the skin's files are read from lazer's folder", () => Game.SkinManager.CurrentSkin.Value.Configuration.LegacyVersion, () => Is.EqualTo(2.3m));
             AddAssert("lazer's login token was not copied", () => File.ReadAllText(Game.Storage.GetFullPath("game.ini")), () => Does.Not.Contain("secret").And.Contain("MenuVoice"));
+            AddAssert("lazer's version was not copied", () => File.ReadAllText(Game.Storage.GetFullPath("game.ini")), () => Does.Not.Contain("2099"));
             AddAssert("lazer folder unchanged", () => lazer.Fingerprint(), () => Is.EqualTo(lazerBefore));
         }
 
