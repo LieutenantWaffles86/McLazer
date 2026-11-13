@@ -8,6 +8,7 @@ using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
+using osu.Game.Fork.Stats;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
@@ -35,6 +36,9 @@ namespace osu.Game.Fork.Profiles
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
+        [Resolved]
+        private LocalProfileOverlay? profileOverlay { get; set; }
+
         private FillFlowContainer list = null!;
         private OsuTextBox nameBox = null!;
         private OsuTextFlowContainer status = null!;
@@ -59,6 +63,7 @@ namespace osu.Game.Fork.Profiles
                     Spacing = new Vector2(0, 4),
                 },
                 nameBox = new OsuTextBox { RelativeSizeAxes = Axes.X, PlaceholderText = @"Profile name" },
+                new RoundedButton { RelativeSizeAxes = Axes.X, Text = @"View profile", Action = viewProfile },
                 new RoundedButton { RelativeSizeAxes = Axes.X, Text = @"New profile", Action = create },
                 new RoundedButton { RelativeSizeAxes = Axes.X, Text = @"Rename", Action = rename },
                 new DangerousRoundedButton { RelativeSizeAxes = Axes.X, Text = @"Delete", Action = delete },
@@ -83,6 +88,12 @@ namespace osu.Game.Fork.Profiles
                 },
             }).ToArray();
         });
+
+        private void viewProfile()
+        {
+            RequestHide?.Invoke();
+            profileOverlay?.ShowProfile(profiles.Active.Id);
+        }
 
         private void create() => report(profiles.Create(nameBox.Text) != null);
 

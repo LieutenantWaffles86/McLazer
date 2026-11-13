@@ -4,20 +4,26 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Extensions;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
+using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Fork.Lazer;
 using osu.Game.Fork.Offline;
 using osu.Game.Fork.Profiles;
+using osu.Game.Fork.Stats;
 using osu.Game.Online;
 using osu.Game.Online.API;
+using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
+using osu.Game.Scoring;
 using osu.Game.Users;
+using Realms;
 
 namespace osu.Game.Fork
 {
@@ -41,10 +47,23 @@ namespace osu.Game.Fork
 
         public ProfileStore Profiles { get; private set; } = null!;
 
-        // shortcut: clicking a player does nothing. The online profile overlay only shows failed requests offline. M6 adds a local profile screen.
+        public LocalProfileOverlay ProfileOverlay { get; private set; } = null!;
+
+        // The online profile overlay only shows failed requests offline. Lazer's players (scores copied from lazer) have no local profile.
         public override void ShowUser(IUser user)
         {
+            if (ProfileStore.IsLocal(user.OnlineID))
+                ProfileOverlay.ShowProfile(user.OnlineID);
         }
+
+        private readonly CancellationTokenSource ppCancellation = new CancellationTokenSource();
+        private readonly SemaphoreSlim ppRunning = new SemaphoreSlim(1);
+        private IDisposable? newScoresSubscription;
+
+        /// <summary>
+        /// Completes when the last requested pp calculation has finished.
+        /// </summary>
+        public Task PPTask { get; private set; } = Task.CompletedTask;
 
         /// <summary>
         /// Completes when the startup sync from the lazer folder has finished.
@@ -113,6 +132,8 @@ namespace osu.Game.Fork
             Profiles = new ProfileStore(Storage, Dependencies.Get<RealmAccess>(), LocalConfig.Get<string>(OsuSetting.Username));
             Dependencies.Cache(Profiles);
 
+            Dependencies.Cache(ProfileOverlay = new LocalProfileOverlay());
+
             // New scores are saved under the local user, so they belong to the active profile.
             api.LocalUser.Value = Profiles.Active.ToAPIUser();
             Profiles.Changed += () => Schedule(() =>
@@ -136,6 +157,17 @@ namespace osu.Game.Fork
         {
             base.LoadComplete();
 
+            ((IOverlayManager)this).RegisterBlockingOverlay(ProfileOverlay);
+
+            // New scores of the profiles get their pp as soon as they are saved.
+            newScoresSubscription = Dependencies.Get<RealmAccess>().RegisterForNotifications(
+                r => r.All<ScoreInfo>().Filter(@"User.OnlineID >= $0 AND PP == nil AND DeletePending == false", ProfileStore.FIRST_ID),
+                (_, changes) =>
+                {
+                    if (changes?.InsertedIndices.Length > 0)
+                        calculateMissingPP();
+                });
+
             if (LinkedLazerFolder == null)
             {
                 Notifications.Post(new SimpleNotification
@@ -156,6 +188,9 @@ namespace osu.Game.Fork
             LazerSyncTask.ContinueWith(t => Schedule(() =>
             {
                 Logger.Log($@"Sync from the lazer folder: {t.GetResultSafely()}");
+
+                // Ranked status comes from the sync, so pp waits for it.
+                calculateMissingPP();
 
                 switch (t.GetResultSafely())
                 {
@@ -179,6 +214,28 @@ namespace osu.Game.Fork
             }), TaskContinuationOptions.OnlyOnRanToCompletion);
         }
 
+        private void calculateMissingPP()
+        {
+            var realm = Dependencies.Get<RealmAccess>();
+            var difficultyCache = Dependencies.Get<BeatmapDifficultyCache>();
+            var token = ppCancellation.Token;
+
+            // One calculation at a time. A second request runs after the first and finds only what is still missing.
+            PPTask = Task.Run(async () =>
+            {
+                await ppRunning.WaitAsync(token).ConfigureAwait(false);
+
+                try
+                {
+                    await LocalStats.PopulateMissingPP(realm, difficultyCache, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    ppRunning.Release();
+                }
+            }, token);
+        }
+
         /// <summary>
         /// Whether lazer is running. Replaced in tests.
         /// </summary>
@@ -197,6 +254,8 @@ namespace osu.Game.Fork
 
         protected override void Dispose(bool isDisposing)
         {
+            ppCancellation.Cancel();
+            newScoresSubscription?.Dispose();
             base.Dispose(isDisposing);
             RealmFileStore.ReadFallback = null;
         }

@@ -47,6 +47,9 @@ namespace osu.Game.Screens.Select
             // McLazer: an offline build only has the Local leaderboard.
             private bool localScopeOnly;
 
+            [Resolved]
+            private LeaderboardManager? leaderboardManager { get; set; }
+
             [BackgroundDependencyLoader]
             private void load(OsuConfigManager config, IAPIProvider api)
             {
@@ -116,6 +119,22 @@ namespace osu.Game.Screens.Select
                 {
                     scopeDropdown.Current.Value = BeatmapLeaderboardScope.Local;
                     scopeDropdown.Items = new[] { BeatmapLeaderboardScope.Local };
+
+                    // McLazer: the local leaderboard shows the active profile by default. This adds the other profiles and lazer's scores.
+                    // A dropdown with one item says nothing, so the toggle takes its place.
+                    if (leaderboardManager != null)
+                    {
+                        scopeDropdown.Alpha = 0;
+                        leaderboardControls.Add(new ShearedToggleButton
+                        {
+                            Anchor = Anchor.CentreRight,
+                            Origin = Anchor.CentreRight,
+                            AutoSizeAxes = Axes.X,
+                            Text = @"All profiles",
+                            Height = 30f,
+                            Active = { BindTarget = leaderboardManager.ShowAllProfiles },
+                        });
+                    }
                 }
 
                 config.BindWith(OsuSetting.BeatmapDetailTab, configDetailTab);

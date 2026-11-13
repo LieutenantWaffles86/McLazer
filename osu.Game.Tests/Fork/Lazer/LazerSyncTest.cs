@@ -15,6 +15,7 @@ using osu.Game.Collections;
 using osu.Game.Database;
 using osu.Game.Extensions;
 using osu.Game.Fork.Lazer;
+using osu.Game.Fork.Profiles;
 using osu.Game.Input.Bindings;
 using osu.Game.Models;
 using osu.Game.Rulesets;
@@ -194,6 +195,41 @@ namespace osu.Game.Tests.Fork.Lazer
             AddAssert("sync succeeds", () => sync(), () => Is.EqualTo(LazerSyncResult.Synced));
             AddAssert("score kept", () => Realm.Run(r => r.All<ScoreInfo>().Count()), () => Is.EqualTo(1));
             AddAssert("set hidden from song select", () => Realm.Run(r => r.Find<BeatmapSetInfo>(setId)!.Beatmaps.All(b => b.Hidden)));
+        }
+
+        [Test]
+        public void TestLazerScoresFollowLazer()
+        {
+            Guid lazerScore = Guid.NewGuid();
+
+            AddStep("lazer has a score", () => lazer.Write(r =>
+            {
+                var beatmap = r.Find<BeatmapSetInfo>(setId)!.Beatmaps.First();
+                r.Add(new ScoreInfo(beatmap, beatmap.Ruleset, new RealmUser { OnlineID = 123, Username = "someone" }) { ID = lazerScore, BeatmapHash = beatmap.Hash, PP = 100 });
+            }));
+            AddStep("set a profile score and an old McLazer score", () =>
+            {
+                sync();
+                Realm.Write(r =>
+                {
+                    var beatmap = r.Find<BeatmapSetInfo>(setId)!.Beatmaps.First();
+                    r.Add(new ScoreInfo(beatmap, beatmap.Ruleset, new RealmUser { OnlineID = ProfileStore.FIRST_ID, Username = "profile" }) { BeatmapHash = beatmap.Hash });
+                    r.Add(new ScoreInfo(beatmap, beatmap.Ruleset) { BeatmapHash = beatmap.Hash });
+                });
+            });
+
+            AddAssert("lazer score copied and marked", () => Realm.Run(r => r.Find<ScoreInfo>(lazerScore)?.RealmUser.Username), () => Is.EqualTo("someone (lazer)"));
+            AddAssert("its beatmap is McLazer's", () => Realm.Run(r => r.Find<ScoreInfo>(lazerScore)!.BeatmapInfo!.ID), () => Is.EqualTo(Realm.Run(r => r.Find<BeatmapSetInfo>(setId)!.Beatmaps.First().ID)));
+            AddAssert("second sync adds nothing", () =>
+            {
+                sync();
+                return Realm.Run(r => r.All<ScoreInfo>().Count());
+            }, () => Is.EqualTo(3));
+
+            AddStep("lazer deletes its score", () => lazer.Write(r => r.Remove(r.Find<ScoreInfo>(lazerScore)!)));
+            AddAssert("sync succeeds", () => sync(), () => Is.EqualTo(LazerSyncResult.Synced));
+            AddAssert("lazer score removed", () => Realm.Run(r => r.Find<ScoreInfo>(lazerScore)), () => Is.Null);
+            AddAssert("McLazer's scores kept", () => Realm.Run(r => r.All<ScoreInfo>().Count()), () => Is.EqualTo(2));
         }
 
         [Test]

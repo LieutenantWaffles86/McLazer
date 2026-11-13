@@ -50,6 +50,11 @@ namespace osu.Game.Online.Leaderboards
 
         private IBindable<APIUser>? localUser;
 
+        /// <summary>
+        /// McLazer: whether the local leaderboard shows every profile's scores and lazer's, not only the active profile's.
+        /// </summary>
+        public readonly BindableBool ShowAllProfiles = new BindableBool();
+
         protected override void LoadComplete()
         {
             base.LoadComplete();
@@ -58,11 +63,14 @@ namespace osu.Game.Online.Leaderboards
             if (api is OfflineAPIAccess)
             {
                 localUser = api.LocalUser.GetBoundCopy();
-                localUser.BindValueChanged(_ =>
+                localUser.BindValueChanged(_ => refetch());
+                ShowAllProfiles.BindValueChanged(_ => refetch());
+
+                void refetch()
                 {
                     if (CurrentCriteria != null)
                         FetchWithCriteria(CurrentCriteria, true);
-                });
+                }
             }
         }
 
@@ -93,8 +101,8 @@ namespace osu.Game.Online.Leaderboards
             {
                 case BeatmapLeaderboardScope.Local:
                 {
-                    // McLazer: the local leaderboard shows the active profile's scores only.
-                    string profileFilter = api is OfflineAPIAccess ? $" AND User.OnlineID == {api.LocalUser.Value.Id}" : string.Empty;
+                    // McLazer: the local leaderboard shows the active profile's scores only, unless all profiles are shown.
+                    string profileFilter = api is OfflineAPIAccess && !ShowAllProfiles.Value ? $" AND User.OnlineID == {api.LocalUser.Value.Id}" : string.Empty;
 
                     localScoreSubscription = realm.RegisterForNotifications(r =>
                         r.All<ScoreInfo>().Filter($"{nameof(ScoreInfo.BeatmapInfo)}.{nameof(BeatmapInfo.ID)} == $0"

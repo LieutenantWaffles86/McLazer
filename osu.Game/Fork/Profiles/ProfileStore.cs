@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game.Database;
+using osu.Game.Fork.Lazer;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Scoring;
 using osu.Game.Users;
@@ -74,10 +75,10 @@ namespace osu.Game.Fork.Profiles
             {
                 var first = add(string.IsNullOrWhiteSpace(defaultName) ? @"Player" : defaultName.Trim());
 
-                // Scores set before there were profiles were saved under the guest user. They go to the first profile.
+                // Scores set before there were profiles were saved under the guest user. They go to the first profile. Copies of lazer's guest scores stay lazer's.
                 realm.Write(r =>
                 {
-                    foreach (var score in r.All<ScoreInfo>().Filter(@"User.OnlineID == $0", APIUser.SYSTEM_USER_ID).ToList())
+                    foreach (var score in r.All<ScoreInfo>().Filter(@"User.OnlineID == $0", APIUser.SYSTEM_USER_ID).ToList().Where(s => !LazerSync.IsLazerScore(s)))
                         score.User = first.ToAPIUser();
                 });
             }

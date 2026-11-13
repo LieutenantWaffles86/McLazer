@@ -10,6 +10,7 @@ using osu.Framework.Platform;
 using osu.Game.Beatmaps;
 using osu.Game.Collections;
 using osu.Game.Database;
+using osu.Game.Fork.Profiles;
 using osu.Game.Input.Bindings;
 using osu.Game.Models;
 using osu.Game.Rulesets;
@@ -40,7 +41,7 @@ namespace osu.Game.Fork.Lazer
     }
 
     /// <summary>
-    /// Copies beatmap, skin, collection and key binding records from a linked lazer folder into McLazer's own database. Lazer is the source of truth.
+    /// Copies beatmap, skin, collection, key binding and score records from a linked lazer folder into McLazer's own database. Lazer is the source of truth.
     /// </summary>
     /// <remarks>
     /// Lazer's database is never opened: opening it would put McLazer's lock on it. It is copied, and the copy is opened.
@@ -81,7 +82,9 @@ namespace osu.Game.Fork.Lazer
                     // shortcut: one write transaction for the whole library, which blocks other writes for its duration. Batch it if a first sync of a large library stalls the game.
                     snapshot.Run(source => realm.Write(target =>
                     {
+                        removeStaleLazerScores(source, target);
                         syncBeatmaps(source, target);
+                        addLazerScores(source, target);
                         syncSkins(source, target);
                         syncCollections(source, target);
                         syncKeyBindings(source, target);
@@ -264,6 +267,58 @@ namespace osu.Game.Fork.Lazer
 
             foreach (var collection in source.All<BeatmapCollection>())
                 target.Add(collection.Detach());
+        }
+
+        /// <summary>
+        /// The name suffix of scores copied from lazer. With an ID outside the profile range, it marks a score as lazer's.
+        /// </summary>
+        public const string LAZER_SCORE_SUFFIX = @" (lazer)";
+
+        /// <summary>
+        /// Whether a score in McLazer's database is a copy of a lazer score.
+        /// </summary>
+        public static bool IsLazerScore(ScoreInfo score) => !ProfileStore.IsLocal(score.UserID) && score.RealmUser.Username.EndsWith(LAZER_SCORE_SUFFIX, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Remove copies of lazer scores that lazer no longer has. Runs before the beatmap sync, so a set lazer deleted is not kept only for them.
+        /// </summary>
+        private static void removeStaleLazerScores(Realm source, Realm target)
+        {
+            var current = source.All<ScoreInfo>().Where(s => !s.DeletePending).AsEnumerable().Select(s => s.ID).ToHashSet();
+
+            foreach (var score in target.All<ScoreInfo>().AsEnumerable().Where(IsLazerScore).Where(s => !current.Contains(s.ID)).ToList())
+                target.Remove(score);
+        }
+
+        /// <summary>
+        /// Copy lazer's scores on beatmaps McLazer has. They show on the "All profiles" leaderboard, never earn pp, and their replays stay in lazer's folder.
+        /// </summary>
+        private static void addLazerScores(Realm source, Realm target)
+        {
+            foreach (var sourceScore in source.All<ScoreInfo>().Where(s => !s.DeletePending))
+            {
+                if (target.Find<ScoreInfo>(sourceScore.ID) != null || sourceScore.BeatmapInfo == null)
+                    continue;
+
+                var beatmap = target.Find<BeatmapInfo>(sourceScore.BeatmapInfo.ID);
+                var ruleset = target.Find<RulesetInfo>(sourceScore.Ruleset.ShortName);
+
+                if (beatmap == null || ruleset?.Available != true)
+                    continue;
+
+                var score = sourceScore.Detach();
+                score.BeatmapInfo = beatmap;
+                score.Ruleset = ruleset;
+                score.RealmUser = new RealmUser
+                {
+                    OnlineID = sourceScore.RealmUser.OnlineID,
+                    Username = sourceScore.RealmUser.Username + LAZER_SCORE_SUFFIX,
+                    CountryCode = sourceScore.RealmUser.CountryCode,
+                };
+
+                copyFiles(target, sourceScore, score);
+                target.Add(score);
+            }
         }
 
         /// <summary>

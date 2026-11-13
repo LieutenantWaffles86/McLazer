@@ -74,7 +74,7 @@ No editors (decided 10 Nov 2026: McLazer is strictly a practice client). All off
 
 Fork code: `osu.Game/Fork/Lazer/` (`LazerFolder`, `LazerSync`, `FallbackReadStorage`, `ScreenLazerFolder`), wired in `osu.Game/Fork/McLazerGame.cs`. Tests: `osu.Game.Tests/Fork/Lazer/`.
 
-Beatmaps, skins, collections and key bindings are copied from a snapshot of lazer's database at each start. Lazer's `game.ini` replaces McLazer's at each start, without the login token. Lazer's `input.json` (mouse, tablet) and `framework.ini` (window, volume, frame limiter) replace McLazer's too, in `McLazerGame.CreateStorage`, before the host loads them. None of this needs a hook. Not done yet: lazer's scores (they show with the "All profiles" leaderboard, M6).
+Beatmaps, skins, collections and key bindings are copied from a snapshot of lazer's database at each start. Lazer's `game.ini` replaces McLazer's at each start, without the login token. Lazer's `input.json` (mouse, tablet) and `framework.ini` (window, volume, frame limiter) replace McLazer's too, in `McLazerGame.CreateStorage`, before the host loads them. None of this needs a hook. Lazer's scores are copied too (see M6).
 
 | File | What changed | Why |
 | --- | --- | --- |
@@ -126,3 +126,16 @@ Fork code: `osu.Game/Fork/Practice/` (`ScrubOverlay`, `CheckpointStore`, `Practi
 | `osu.Game/Screens/Play/Player.cs` | New virtual `CanPauseWithReplayLoaded` (false), checked where replays refuse to pause. | A seek session plays the run's own input as a replay. Esc paused nothing and left the map. |
 | `osu.Game/Screens/Play/Player.cs` | New `ProgressToResultsNow()`. | A practice run shows results only when the player asks at the end of the map. |
 | `osu.Game/Screens/Select/SoloSongSelect.cs` | Adds the Practice footer button and passes it to `PracticePlayer.StartAsPractice`. | The practice toggle. |
+
+## M6: stats
+
+Fork code: `osu.Game/Fork/Stats/` (`LocalStats`, `LocalProfileOverlay`), score sync in `osu.Game/Fork/Lazer/LazerSync.cs`, wired in `osu.Game/Fork/McLazerGame.cs`. Tests: `osu.Game.Tests/Fork/Profiles/`, `osu.Game.Tests/Fork/Lazer/LazerSyncTest.cs`.
+
+- Lazer's scores are copied at each sync, with " (lazer)" after the player's name. They show on the "All profiles" leaderboard and never earn pp. Their replays stay in lazer's folder.
+- pp is calculated for the profiles' own passed scores on ranked or approved maps (ranked status from lazer), and stored in `ScoreInfo.PP`. Total pp: the best score per map, sorted by pp, each counting 95% as much as the one before. No bonus pp.
+- The profile screen opens from "View profile" in the profile picker, and by clicking a profile's name on a leaderboard.
+
+| File | What changed | Why |
+| --- | --- | --- |
+| `osu.Game/Online/Leaderboards/LeaderboardManager.cs` | New `ShowAllProfiles`. When set, the Local query does not filter by the active profile; a change refetches. | The "All profiles" leaderboard. |
+| `osu.Game/Screens/Select/BeatmapDetailsArea.Header.cs` | Offline only: an "All profiles" toggle bound to `LeaderboardManager.ShowAllProfiles`, in place of the one-item scope dropdown. | Same. |

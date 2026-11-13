@@ -10,7 +10,12 @@ using osu.Framework.Audio;
 using osu.Framework.Platform;
 using osu.Framework.Testing;
 using osu.Game.Beatmaps;
+using osu.Game.Fork.Lazer;
 using osu.Game.Fork.Profiles;
+using osu.Game.Fork.Stats;
+using osu.Game.Models;
+using osu.Game.Rulesets.Scoring;
+using osu.Framework.Graphics.Containers;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Leaderboards;
 using osu.Game.Overlays;
@@ -114,6 +119,11 @@ namespace osu.Game.Tests.Fork.Profiles
             AddStep("switch to the first profile", () => profiles.Switch(first));
             AddUntilStep("first sees its one score", () => leaderboard.Scores.Value?.TopScores.Select(s => s.User.Id), () => Is.EqualTo(new[] { first.Id }));
 
+            AddStep("show all profiles", () => leaderboard.ShowAllProfiles.Value = true);
+            AddUntilStep("all three scores", () => leaderboard.Scores.Value?.TopScores.Count, () => Is.EqualTo(3));
+            AddStep("show this profile only", () => leaderboard.ShowAllProfiles.Value = false);
+            AddUntilStep("one score again", () => leaderboard.Scores.Value?.TopScores.Count, () => Is.EqualTo(1));
+
             AddStep("rename the first profile", () => profiles.Rename(first, "renamed"));
             AddUntilStep("its score shows the new name", () => leaderboard.Scores.Value?.TopScores.Select(s => s.User.Username), () => Is.EqualTo(new[] { "renamed" }));
 
@@ -126,6 +136,96 @@ namespace osu.Game.Tests.Fork.Profiles
             AddStep("delete it with its scores", () => profiles.Delete(profiles.Active, true));
             AddAssert("first is active again", () => profiles.Active, () => Is.EqualTo(first));
             AddAssert("the last profile cannot be deleted", () => profiles.Delete(first, true), () => Is.False);
+        }
+
+        [Test]
+        public void TestTotalPPMatchesAHandCalculation()
+        {
+            BeatmapInfo third = null!;
+
+            AddStep("set scores on three ranked maps", () => Game.Realm.Write(r =>
+            {
+                var beatmaps = r.All<BeatmapInfo>().ToList().Where(b => !b.BeatmapSet!.Protected && b.Ruleset.ShortName == "osu").Take(3).ToList();
+                Assert.That(beatmaps, Has.Count.EqualTo(3));
+
+                foreach (var b in beatmaps)
+                    b.Status = BeatmapOnlineStatus.Ranked;
+                third = beatmaps[2];
+
+                void add(BeatmapInfo beatmap, double pp, int userId, ScoreRank rank = ScoreRank.S, string name = "")
+                {
+                    var score = new ScoreInfo(beatmap, beatmap.Ruleset) { BeatmapHash = beatmap.Hash, PP = pp, Accuracy = pp / 1000, Rank = rank };
+                    score.RealmUser = new RealmUser { OnlineID = userId, Username = name };
+                    r.Add(score);
+                }
+
+                int me = profiles.Active.Id;
+
+                add(beatmaps[0], 100, me);
+                add(beatmaps[1], 300, me);
+                add(beatmaps[1], 50, me); // a worse score on the same map does not count
+                add(beatmaps[2], 200, me);
+                add(beatmaps[2], 1000, me, ScoreRank.F); // failed
+                add(beatmaps[0], 1000, 123, name: "someone" + LazerSync.LAZER_SCORE_SUFFIX); // lazer's
+            }));
+
+            AddAssert("total is 300 + 200 × 0.95 + 100 × 0.95²", () => LocalStats.For(Game.Realm, profiles.Active.Id).TotalPP, () => Is.EqualTo(300 + 200 * 0.95 + 100 * 0.9025).Within(1e-9));
+            AddAssert("accuracy weighted the same way", () => LocalStats.For(Game.Realm, profiles.Active.Id).Accuracy,
+                () => Is.EqualTo((0.3 + 0.2 * 0.95 + 0.1 * 0.9025) / (1 + 0.95 + 0.9025)).Within(1e-9));
+            AddAssert("every saved score is a play", () => LocalStats.For(Game.Realm, profiles.Active.Id).PlayCount, () => Is.EqualTo(5));
+            AddAssert("top plays in pp order", () => LocalStats.For(Game.Realm, profiles.Active.Id).TopPlays.Select(s => s.PP), () => Is.EqualTo(new double?[] { 300, 200, 100 }));
+
+            AddStep("the third map is no longer ranked", () => Game.Realm.Write(r => r.Find<BeatmapInfo>(third.ID)!.Status = BeatmapOnlineStatus.Pending));
+            AddAssert("its score no longer counts", () => LocalStats.For(Game.Realm, profiles.Active.Id).TotalPP, () => Is.EqualTo(300 + 100 * 0.95).Within(1e-9));
+        }
+
+        [Test]
+        public void TestNewScoresGetPP()
+        {
+            Guid ranked = Guid.Empty, unranked = Guid.Empty;
+
+            AddStep("save a score on a ranked map and one on an unranked map", () => Game.Realm.Write(r =>
+            {
+                var beatmaps = r.All<BeatmapInfo>().ToList().Where(b => !b.BeatmapSet!.Protected && b.Ruleset.ShortName == "osu").Take(2).ToList();
+                beatmaps[0].Status = BeatmapOnlineStatus.Ranked;
+                beatmaps[1].Status = BeatmapOnlineStatus.Graveyard;
+
+                foreach (var beatmap in beatmaps)
+                {
+                    var score = new ScoreInfo(beatmap, beatmap.Ruleset)
+                    {
+                        BeatmapHash = beatmap.Hash,
+                        Rank = ScoreRank.X,
+                        Accuracy = 1,
+                        MaxCombo = beatmap.TotalObjectCount,
+                        Statistics = { [HitResult.Great] = beatmap.TotalObjectCount },
+                        MaximumStatistics = { [HitResult.Great] = beatmap.TotalObjectCount },
+                    };
+                    score.User = profiles.Active.ToAPIUser();
+                    r.Add(score);
+
+                    if (beatmap == beatmaps[0])
+                        ranked = score.ID;
+                    else
+                        unranked = score.ID;
+                }
+            }));
+
+            AddUntilStep("ranked map score has pp", () => Game.Realm.Run(r => r.Find<ScoreInfo>(ranked)!.PP ?? 0), () => Is.GreaterThan(0));
+            AddUntilStep("calculation finished", () => Game.PPTask.IsCompleted);
+            AddAssert("unranked map score has none", () => Game.Realm.Run(r => r.Find<ScoreInfo>(unranked)!.PP), () => Is.Null);
+        }
+
+        [Test]
+        public void TestClickingAProfileOpensIt()
+        {
+            AddStep("show the active profile", () => Game.ShowUser(profiles.Active.ToAPIUser()));
+            AddUntilStep("profile overlay shown", () => Game.ProfileOverlay.State.Value, () => Is.EqualTo(Visibility.Visible));
+            AddAssert("for the active profile", () => Game.ProfileOverlay.ProfileId, () => Is.EqualTo(profiles.Active.Id));
+            AddStep("close it", () => Game.ProfileOverlay.Hide());
+
+            AddStep("show a lazer player", () => Game.ShowUser(new APIUser { Id = 123, Username = "someone" }));
+            AddAssert("nothing opens", () => Game.ProfileOverlay.State.Value, () => Is.EqualTo(Visibility.Hidden));
         }
 
         [Test]
