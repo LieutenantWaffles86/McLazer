@@ -86,7 +86,7 @@ namespace osu.Game.Screens.Play.HUD
             if (drawableRuleset != null)
             {
                 if (player?.Configuration.AllowUserInteraction == true)
-                    ((IBindable<bool>)Interactive).BindTo(drawableRuleset.HasReplayLoaded);
+                    ((IBindable<bool>)Interactive).BindTo(player.SeekingAllowed); // McLazer: was drawableRuleset.HasReplayLoaded, which is still the default.
 
                 Objects = drawableRuleset.Objects;
             }

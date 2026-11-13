@@ -196,8 +196,8 @@ namespace osu.Game.Tests.Fork.Practice
 
             AtTime(GapAfter(4), "capture state", () => afterResume = CaptureState());
 
-            // The first resume cut the recording after circle 0, so the seek over circle 1 was skipped time.
-            AddAssert("live play continues", () => afterResume.Statistics, () => Is.EqualTo("Miss: 1, Great: 4"));
+            // The seek during the resume overlay undid the first resume's cut, so circle 1 replays as the hit it was.
+            AddAssert("live play continues", () => afterResume.Statistics, () => Is.EqualTo("Great: 5"));
         }
     }
 }

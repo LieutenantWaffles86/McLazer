@@ -94,3 +94,15 @@ Profiles live in `profiles.json` in McLazer's own folder. The active profile is 
 | `osu.Game/Overlays/LoginOverlay.cs` | Shows `ProfilePanel` instead of `LoginPanel`. | The toolbar user button opens the profile picker. There is no login. |
 | `osu.Game/Online/Leaderboards/LeaderboardManager.cs` | The Local query also matches `User.OnlineID` to the local user, and a change of local user refetches. | Each profile sees only its own scores. |
 | `osu.Game/OsuGame.cs` | `ShowUser` is virtual. `McLazerGame` overrides it to do nothing. | Clicking a player opened the online profile overlay, which only shows failed requests. |
+
+## M4: seek engine
+
+Fork code: `osu.Game/Fork/Practice/` (`PracticePlayer`, `SeekSession`). Tests: `osu.Game.Tests/Fork/Practice/` (`TestSceneSeekBenchmark` is explicit: run it in a Release build).
+
+Left and Right seek 5 s through the replay seek bindings (`GlobalAction.SeekReplayBackward`, `SeekReplayForward`), so they follow lazer's key bindings.
+
+| File | What changed | Why |
+| --- | --- | --- |
+| `osu.Game/Screens/Play/Player.cs` | `Seek` is virtual. | The progress bar calls `Player.Seek`. `PracticePlayer` sends it through its seek session. |
+| `osu.Game/Screens/Play/Player.cs` | New virtual `SeekingAllowed`, by default `DrawableRuleset.HasReplayLoaded`. | `PracticePlayer` allows seeking for the rest of a practice run. |
+| `osu.Game/Screens/Play/HUD/SongProgress.cs` | `Interactive` binds to `player.SeekingAllowed` instead of `drawableRuleset.HasReplayLoaded`. | Same. Upstream players keep the old behaviour through the default. |

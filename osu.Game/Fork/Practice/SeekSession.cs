@@ -51,6 +51,13 @@ namespace osu.Game.Fork.Practice
         /// </summary>
         private double? recordedUntil;
 
+        /// <summary>
+        /// The session as it was before the last <see cref="Commit"/>, kept until live play restarts.
+        /// A seek before then (during the resume overlay) undoes the commit, so the player can still go forward over input past the resume point,
+        /// for example after rewinding one step too far.
+        /// </summary>
+        private (Score SeekScore, double? RecordedUntil, List<(double Start, double End)> SkippedRanges)? lastCommit;
+
         public SeekSession(DrawableRuleset drawableRuleset, GameplayClockContainer clock, GameplayState gameplayState)
         {
             this.drawableRuleset = drawableRuleset;
@@ -77,16 +84,27 @@ namespace osu.Game.Fork.Practice
             // Otherwise the recorder would write replay-driven input back into the run.
             drawableRuleset.SetRecordTarget(null);
 
-            var run = gameplayState.Score;
+            if (lastCommit is { } undo)
+            {
+                seekScore = undo.SeekScore;
+                recordedUntil = undo.RecordedUntil;
+                skippedRanges.Clear();
+                skippedRanges.AddRange(undo.SkippedRanges);
+                lastCommit = null;
+            }
+            else
+            {
+                var run = gameplayState.Score;
 
-            seekScore = new Score { ScoreInfo = run.ScoreInfo, Replay = run.Replay.DeepClone() };
+                seekScore = new Score { ScoreInfo = run.ScoreInfo, Replay = run.Replay.DeepClone() };
 
-            var lastFrame = seekScore.Replay.Frames.LastOrDefault();
-            recordedUntil = lastFrame?.Time;
+                var lastFrame = seekScore.Replay.Frames.LastOrDefault();
+                recordedUntil = lastFrame?.Time;
 
-            // Release every key after the last recorded input, so time past it is played with no input.
-            if (lastFrame != null && createIdleFrame(lastFrame, lastFrame.Time) is ReplayFrame idle)
-                seekScore.Replay.Frames.Add(idle);
+                // Release every key after the last recorded input, so time past it is played with no input.
+                if (lastFrame != null && createIdleFrame(lastFrame, lastFrame.Time) is ReplayFrame idle)
+                    seekScore.Replay.Frames.Add(idle);
+            }
 
             // With a replay attached, FrameStabilityContainer keeps running while paused and accepts jumps of any size.
             drawableRuleset.SetReplayScore(seekScore);
@@ -102,6 +120,10 @@ namespace osu.Game.Fork.Practice
         protected override void Update()
         {
             base.Update();
+
+            // Live play has restarted, so the last commit stands.
+            if (lastCommit != null && !clock.IsPaused.Value)
+                lastCommit = null;
 
             // The gameplay clock is stopped for the whole session, so its time is the target.
             if (IsSeeking && drawableRuleset.FrameStableClock.CurrentTime == clock.CurrentTime)
@@ -124,6 +146,8 @@ namespace osu.Game.Fork.Practice
                 return;
 
             double time = drawableRuleset.FrameStableClock.CurrentTime;
+
+            lastCommit = (seekScore, recordedUntil, skippedRanges.ToList());
 
             var frames = seekScore.Replay.Frames.Where(f => f.Time <= time).ToList();
 
