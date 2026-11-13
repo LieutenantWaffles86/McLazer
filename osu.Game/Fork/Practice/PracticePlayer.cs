@@ -121,6 +121,7 @@ namespace osu.Game.Fork.Practice
         private bool endPromptShown;
         private bool resultsRequested;
         private int lastMarkerState;
+        private int lastHudState;
 
         private int profileId;
         private string beatmapMD5 = string.Empty;
@@ -512,8 +513,14 @@ namespace osu.Game.Fork.Practice
 
             var events = ScoreProcessor.HitEvents;
 
-            if (IsPractice && !SeekSession.IsActive)
+            // Only when something changed: the section can hold every hit event of the map, and gameplay frames must not allocate for nothing.
+            int hudState = HashCode.Combine(events.Count, sectionStart, Checkpoint, Attempts);
+
+            if (IsPractice && !SeekSession.IsActive && hudState != lastHudState)
+            {
+                lastHudState = hudState;
                 PracticeHud.ShowSection(events.Skip(Math.Min(sectionStart, events.Count)).ToList(), ScoreProcessor.GetBaseScoreForResult, Checkpoint, Attempts);
+            }
 
             int markerState = HashCode.Combine(events.Count, Checkpoint, failPoints.Count, SeekSession.SkippedRanges.Count);
 

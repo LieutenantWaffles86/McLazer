@@ -58,6 +58,7 @@ Hooks marked "offline only" check `api is OfflineAPIAccess`, so upstream tests (
 Upstream tests that fail by design:
 
 - `TestSceneMainMenu.TestOnlineMenuBannerUntrustedDomain` downloads a banner image from `assets.ppy.sh`. With online resource lookups blocked, the image never loads.
+- Song previews from `b.ppy.sh` never load, for the same reason: `TestSceneBeatmapCard.TestPlayButtonByTouchInput`, `TestSceneBeatmapCardThumbnail.TestThumbnailPreview`, `TestSceneRankedPlayScreen.TestPreviewStopsOnEnteringGameplay`, `TestSceneSongPreview` (both tests).
 - `BeatmapImporterTests.TestImportFailsWithFilenamesDifferingOnlyInCase` also fails on unmodified upstream on this machine (the archive library rejects the test's own fixture).
 
 No editors (decided 10 Nov 2026: McLazer is strictly a practice client). All offline only:
