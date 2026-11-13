@@ -110,12 +110,19 @@ Left and Right seek 5 s through the replay seek bindings (`GlobalAction.SeekRepl
 
 ## M5: practice UI
 
-Fork code: `osu.Game/Fork/Practice/` (`ScrubOverlay`). Tests: `osu.Game.Tests/Fork/Practice/TestSceneScrub.cs`.
+Fork code: `osu.Game/Fork/Practice/` (`ScrubOverlay`, `CheckpointStore`, `PracticeHud`, `PracticeMenuOverlay`, `FooterButtonPractice`). Tests: `osu.Game.Tests/Fork/Practice/`.
 
-Holding Shift shows the map's difficulty graph (aim and speed), as in McOsu. Clicks jump and hold there; releasing Shift resumes.
+- Hold Shift: the map's difficulty graph (aim and speed), as in McOsu. Click to jump and hold there; right-click to set the checkpoint; release Shift to resume. While Shift is held, Left/Right and comma/period seek 5 s and one frame.
+- F6 saves the checkpoint (`practice/<profile id>/<beatmap MD5>.json`), F7 loads it.
+- A practice tool used in a normal run asks "practice this run?" first. Saving a checkpoint does not ask.
+- The Practice footer button at song select starts runs as practice.
+- A practice run shows a "PRACTICE" panel with the current section's stats (since the last resume), and at the end of the map offers "Load checkpoint", "Play from the start" and "Results".
 
 | File | What changed | Why |
 | --- | --- | --- |
-| `osu.Game/Input/Bindings/GlobalActionContainer.cs` | New `GlobalActionCategory.Practice` and `GlobalAction.PracticeScrub = 10000`, bound to Shift. | The scrub key. Fork actions start at 10,000, so upstream's new actions never shift their saved numbers. |
-| `osu.Game/Overlays/Settings/Sections/Input/KeyBindingPanel.cs` | A "Practice" subsection under gameplay. | The scrub key can be rebound. |
+| `osu.Game/Input/Bindings/GlobalActionContainer.cs` | New `GlobalActionCategory.Practice` and `GlobalAction.PracticeScrub = 10000` (Shift), `PracticeQuickSave = 10001` (F6), `PracticeQuickLoad = 10002` (F7). Listed before the overlay bindings. | Fork actions start at 10,000, so upstream's new actions never shift their saved numbers. Before the overlays, so F6 does not also open now playing. |
+| `osu.Game/Overlays/Settings/Sections/Input/KeyBindingPanel.cs` | A "Practice" subsection under gameplay. | The practice keys can be rebound. |
 | `osu.Game/Rulesets/Difficulty/DifficultyCalculator.cs` | New `CalculateObjectDifficulties`: each skill's difficulty for every object. | The scrub graph. The skills are only reachable from inside the calculator. |
+| `osu.Game/Screens/Play/Player.cs` | New virtual `CanPauseWithReplayLoaded` (false), checked where replays refuse to pause. | A seek session plays the run's own input as a replay. Esc paused nothing and left the map. |
+| `osu.Game/Screens/Play/Player.cs` | New `ProgressToResultsNow()`. | A practice run shows results only when the player asks at the end of the map. |
+| `osu.Game/Screens/Select/SoloSongSelect.cs` | Adds the Practice footer button and passes it to `PracticePlayer.StartAsPractice`. | The practice toggle. |

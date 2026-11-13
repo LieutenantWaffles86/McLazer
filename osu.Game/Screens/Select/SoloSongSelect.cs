@@ -7,6 +7,7 @@ using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Audio.Sample;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions.LocalisationExtensions;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Screens;
@@ -98,6 +99,11 @@ namespace osu.Game.Screens.Select
                 yield return new OsuMenuItem(WebCommonStrings.ButtonsHide.ToSentence(), MenuItemType.Standard, () => beatmaps.Hide(beatmap));
         }
 
+        // McLazer: the practice toggle. It stays as set until the game closes.
+        private readonly BindableBool practice = new BindableBool();
+
+        public override IReadOnlyList<ScreenFooterButton> CreateFooterButtons() => base.CreateFooterButtons().Append(new FooterButtonPractice { Current = { BindTarget = practice } }).ToArray();
+
         protected override void OnStart()
         {
             if (playerLoader != null) return;
@@ -142,7 +148,7 @@ namespace osu.Game.Screens.Select
                 }
                 else
                 {
-                    player = new PracticePlayer(); // McLazer: all local play goes through PracticePlayer.
+                    player = new PracticePlayer { StartAsPractice = practice.Value }; // McLazer: all local play goes through PracticePlayer.
                 }
 
                 return player;

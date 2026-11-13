@@ -10,12 +10,16 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
+using osuTK.Input;
 
 namespace osu.Game.Fork.Practice
 {
     /// <summary>
-    /// The map's strain graph, shown while the scrub key is held, as in McOsu. Clicking or dragging on it jumps there.
+    /// The map's strain graph, shown while the scrub key is held, as in McOsu. Clicking or dragging on it jumps there; right-clicking sets the checkpoint.
     /// </summary>
+    /// <remarks>
+    /// Markers: the checkpoint (green diamond), misses (red ticks), where health hit zero (yellow lines) and skipped time (light bands).
+    /// </remarks>
     public partial class ScrubOverlay : CompositeDrawable
     {
         /// <summary>
@@ -36,21 +40,25 @@ namespace osu.Game.Fork.Practice
         private readonly double endTime;
         private readonly Func<double> currentTime;
         private readonly Action<double> seek;
+        private readonly Action<double> setCheckpoint;
 
         private readonly Box position;
+        private readonly Container markers;
 
         /// <param name="difficulties">Each skill's difficulty for every object, at the object's time.</param>
         /// <param name="startTime">The time at the graph's left edge: the first object.</param>
         /// <param name="endTime">The time at the graph's right edge: the last object.</param>
         /// <param name="currentTime">The gameplay time, for the position marker.</param>
         /// <param name="seek">Jumps to a time.</param>
+        /// <param name="setCheckpoint">Sets the checkpoint at a time.</param>
         public ScrubOverlay(IReadOnlyList<(Type Skill, (double Time, double Difficulty)[] Objects)> difficulties, double startTime, double endTime, Func<double> currentTime,
-                            Action<double> seek)
+                            Action<double> seek, Action<double> setCheckpoint)
         {
             this.startTime = startTime;
             this.endTime = endTime;
             this.currentTime = currentTime;
             this.seek = seek;
+            this.setCheckpoint = setCheckpoint;
 
             Anchor = Anchor.BottomCentre;
             Origin = Anchor.BottomCentre;
@@ -65,7 +73,7 @@ namespace osu.Game.Fork.Practice
             InternalChildren = new Drawable[]
             {
                 new Box { RelativeSizeAxes = Axes.Both, Colour = Color4.Black, Alpha = 0.6f },
-            }.Concat(graphs).Append(position = new Box
+            }.Concat(graphs).Append(markers = new Container { RelativeSizeAxes = Axes.Both }).Append(position = new Box
             {
                 RelativePositionAxes = Axes.X,
                 RelativeSizeAxes = Axes.Y,
@@ -110,8 +118,49 @@ namespace osu.Game.Fork.Practice
         protected override void Update()
         {
             base.Update();
-            position.X = (float)Math.Clamp((currentTime() - startTime) / Math.Max(1, endTime - startTime), 0, 1);
+            position.X = toX(currentTime());
         }
+
+        public void SetMarkers(double? checkpoint, IEnumerable<double> misses, IEnumerable<double> failPoints, IEnumerable<(double Start, double End)> skipped)
+        {
+            markers.Clear();
+
+            foreach (var (start, end) in skipped)
+            {
+                markers.Add(new Box
+                {
+                    RelativePositionAxes = Axes.X,
+                    RelativeSizeAxes = Axes.Both,
+                    X = toX(start),
+                    Width = Math.Max(0.002f, toX(end) - toX(start)),
+                    Colour = Color4.White,
+                    Alpha = 0.15f,
+                });
+            }
+
+            foreach (double time in misses)
+                markers.Add(new Box { RelativePositionAxes = Axes.X, RelativeSizeAxes = Axes.Y, X = toX(time), Width = 2, Height = 0.3f, Origin = Anchor.TopCentre, Colour = Color4.Red });
+
+            foreach (double time in failPoints)
+                markers.Add(new Box { RelativePositionAxes = Axes.X, RelativeSizeAxes = Axes.Y, X = toX(time), Width = 2, Origin = Anchor.TopCentre, Colour = Color4.Yellow });
+
+            if (checkpoint is double checkpointTime)
+            {
+                markers.Add(new Box
+                {
+                    RelativePositionAxes = Axes.X,
+                    X = toX(checkpointTime),
+                    Y = 4,
+                    Size = new Vector2(12),
+                    Rotation = 45,
+                    Origin = Anchor.Centre,
+                    Anchor = Anchor.TopLeft,
+                    Colour = Color4.LimeGreen,
+                });
+            }
+        }
+
+        private float toX(double time) => (float)Math.Clamp((time - startTime) / Math.Max(1, endTime - startTime), 0, 1);
 
         public override void Show() => this.FadeIn(100);
 
@@ -119,18 +168,22 @@ namespace osu.Game.Fork.Practice
 
         protected override bool OnMouseDown(MouseDownEvent e)
         {
-            seekTo(e.ScreenSpaceMousePosition);
+            if (e.Button == MouseButton.Right)
+                setCheckpoint(timeAt(e.ScreenSpaceMousePosition));
+            else
+                seek(timeAt(e.ScreenSpaceMousePosition));
+
             return true;
         }
 
-        protected override bool OnDragStart(DragStartEvent e) => true;
+        protected override bool OnDragStart(DragStartEvent e) => e.Button == MouseButton.Left;
 
-        protected override void OnDrag(DragEvent e) => seekTo(e.ScreenSpaceMousePosition);
+        protected override void OnDrag(DragEvent e) => seek(timeAt(e.ScreenSpaceMousePosition));
 
-        private void seekTo(Vector2 screenSpacePosition)
+        private double timeAt(Vector2 screenSpacePosition)
         {
             float x = Math.Clamp(ToLocalSpace(screenSpacePosition).X / DrawWidth, 0, 1);
-            seek(startTime + x * (endTime - startTime));
+            return startTime + x * (endTime - startTime);
         }
     }
 }

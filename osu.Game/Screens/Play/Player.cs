@@ -857,6 +857,11 @@ namespace osu.Game.Screens.Play
         }
 
         /// <summary>
+        /// McLazer: show the results screen now. A practice run shows it only on request.
+        /// </summary>
+        protected void ProgressToResultsNow() => progressToResults(false);
+
+        /// <summary>
         /// Queue the results screen for display.
         /// </summary>
         /// <remarks>
@@ -1062,9 +1067,14 @@ namespace osu.Game.Screens.Play
             // must pass basic screen conditions (beatmap loaded, instance allows pause)
             LoadedBeatmapSuccessfully && Configuration.AllowPause && ValidForResume
             // replays cannot be paused and exit immediately
-            && !DrawableRuleset.HasReplayLoaded.Value
+            && (!DrawableRuleset.HasReplayLoaded.Value || CanPauseWithReplayLoaded) // McLazer: a practice seek session can pause.
             // cannot pause if we are already in a fail state
             && !GameplayState.HasFailed;
+
+        /// <summary>
+        /// McLazer: whether pausing is allowed while a replay is loaded. A practice seek session plays the run's own input as a replay.
+        /// </summary>
+        protected virtual bool CanPauseWithReplayLoaded => false;
 
         private bool canResume =>
             // cannot resume from a non-paused state

@@ -27,6 +27,7 @@ namespace osu.Game.Tests.Fork.Practice
                 Player.ScoreProcessor.JudgementReverted += _ => reverted++;
                 InputManager.Key(Key.Left);
             });
+            AcceptPracticePrompt();
             AddUntilStep("run is practice", () => Player.IsPractice);
             WaitForResume();
 

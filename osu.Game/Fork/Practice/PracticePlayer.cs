@@ -8,17 +8,23 @@ using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
+using osu.Framework.Localisation;
 using osu.Framework.Logging;
+using osu.Framework.Platform;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Input.Bindings;
 using osu.Game.Online.API;
 using osu.Game.Online.Rooms;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
+using osu.Game.Screens.Ranking;
+using osuTK.Graphics;
 using osuTK.Input;
 
 namespace osu.Game.Fork.Practice
@@ -29,6 +35,7 @@ namespace osu.Game.Fork.Practice
     /// <remarks>
     /// A normal run plays as in lazer's <see cref="SoloPlayer"/> and is saved locally. Nothing is submitted online.
     /// A practice run can jump in time (see <see cref="SeekSession"/>), never fails and is never saved as a score.
+    /// Using a practice tool in a normal run asks first, then turns it into a practice run.
     /// </remarks>
     public partial class PracticePlayer : SoloPlayer, IKeyBindingHandler<GlobalAction>
     {
@@ -38,9 +45,29 @@ namespace osu.Game.Fork.Practice
         public const double SEEK_STEP = 5 * ReplayPlayer.BASE_SEEK_AMOUNT;
 
         /// <summary>
+        /// How far the frame step keys jump: one frame at 60 fps.
+        /// </summary>
+        public const double FRAME_STEP = 1000 / 60.0;
+
+        /// <summary>
+        /// Whether the run starts as a practice run (the practice toggle at song select).
+        /// </summary>
+        public bool StartAsPractice { get; init; }
+
+        /// <summary>
         /// Whether this run is a practice run. Once set, it stays set for the run.
         /// </summary>
         public bool IsPractice { get; private set; }
+
+        /// <summary>
+        /// The quick-save checkpoint, if any. Saved per profile and map.
+        /// </summary>
+        public double? Checkpoint { get; private set; }
+
+        /// <summary>
+        /// How many times the checkpoint has been loaded since it was set.
+        /// </summary>
+        public int Attempts { get; private set; }
 
         // The progress bar never seeks: it is optional and skins can leave it out. Seeks come from keys only.
         // Upstream turns it on while a replay is loaded, which a seek session is.
@@ -50,6 +77,27 @@ namespace osu.Game.Fork.Practice
 
         protected ScrubOverlay ScrubOverlay { get; private set; } = null!;
 
+        protected PracticeHud PracticeHud { get; private set; } = null!;
+
+        /// <summary>
+        /// Asks whether a normal run should become a practice run.
+        /// </summary>
+        protected PracticeMenuOverlay PracticePrompt { get; private set; } = null!;
+
+        /// <summary>
+        /// Offers the next step when a practice run reaches the end of the map.
+        /// </summary>
+        protected PracticeMenuOverlay EndPrompt { get; private set; } = null!;
+
+        [Resolved]
+        private Storage storage { get; set; } = null!;
+
+        [Resolved]
+        private IAPIProvider api { get; set; } = null!;
+
+        [Resolved]
+        private OsuColour colours { get; set; } = null!;
+
         /// <summary>
         /// Whether the scrub key is held. Seeks then stay at their target, so the player can scrub over their own attempt, and resume when it is released.
         /// </summary>
@@ -57,7 +105,25 @@ namespace osu.Game.Fork.Practice
 
         private bool resumeOnArrival;
         private OsuSpriteText seekingText = null!;
+        private OsuSpriteText toast = null!;
         private double seekingFor;
+
+        /// <summary>
+        /// The index in the hit events where the current section starts.
+        /// </summary>
+        private int sectionStart;
+
+        /// <summary>
+        /// Times where health hit zero. A normal run would have failed there.
+        /// </summary>
+        private readonly List<double> failPoints = new List<double>();
+
+        private bool endPromptShown;
+        private bool resultsRequested;
+        private int lastMarkerState;
+
+        private int profileId;
+        private string beatmapMD5 = string.Empty;
 
         public PracticePlayer(PlayerConfiguration? configuration = null)
             : base(configuration)
@@ -71,6 +137,7 @@ namespace osu.Game.Fork.Practice
                 return;
 
             AddInternal(SeekSession = new SeekSession(DrawableRuleset, GameplayClockContainer, GameplayState));
+            AddInternal(PracticeHud = new PracticeHud());
             AddInternal(seekingText = new OsuSpriteText
             {
                 Anchor = Anchor.Centre,
@@ -79,15 +146,48 @@ namespace osu.Game.Fork.Practice
                 Font = OsuFont.GetFont(size: 30, weight: FontWeight.Bold),
                 Alpha = 0,
             });
+            AddInternal(toast = new OsuSpriteText
+            {
+                Anchor = Anchor.TopCentre,
+                Origin = Anchor.TopCentre,
+                Y = 120,
+                Font = OsuFont.GetFont(size: 20, weight: FontWeight.SemiBold),
+                Alpha = 0,
+            });
 
             var hitObjects = GameplayState.Beatmap.HitObjects;
             AddInternal(ScrubOverlay = new ScrubOverlay(calculateDifficulties(), hitObjects.FirstOrDefault()?.StartTime ?? 0, GameplayState.Beatmap.GetLastObjectTime(),
-                () => DrawableRuleset.FrameStableClock.CurrentTime, time =>
+                () => DrawableRuleset.FrameStableClock.CurrentTime,
+                time =>
                 {
                     // The overlay still takes clicks while it fades out. Without the key held, nothing would resume after the jump.
                     if (scrubbing)
-                        PracticeSeek(time);
+                        usePracticeTool(() => PracticeSeek(time, !scrubbing));
+                },
+                time =>
+                {
+                    if (scrubbing)
+                        saveCheckpoint(time);
                 }));
+
+            AddInternal(PracticePrompt = new PracticeMenuOverlay(@"practice this run?"));
+            AddInternal(EndPrompt = new PracticeMenuOverlay(@"end of the map"));
+
+            profileId = api.LocalUser.Value.OnlineID;
+            beatmapMD5 = Beatmap.Value.BeatmapInfo.MD5Hash;
+            Checkpoint = CheckpointStore.Load(storage, profileId, beatmapMD5);
+
+            HealthProcessor.Health.BindValueChanged(health =>
+            {
+                double time = DrawableRuleset.FrameStableClock.CurrentTime;
+
+                // Replayed jumps cross the same points again.
+                if (health.NewValue <= 0 && health.OldValue > 0 && failPoints.All(t => Math.Abs(t - time) > 1))
+                    failPoints.Add(time);
+            });
+
+            if (StartAsPractice)
+                becomePractice();
         }
 
         private IReadOnlyList<(Type Skill, (double Time, double Difficulty)[] Objects)> calculateDifficulties()
@@ -110,7 +210,7 @@ namespace osu.Game.Fork.Practice
         #region Seeking
 
         /// <summary>
-        /// Jump to a time in the map. This turns the run into a practice run.
+        /// Jump to a time in the map. This turns the run into a practice run without asking.
         /// </summary>
         /// <param name="time">The time to jump to. Clamped to the map.</param>
         /// <param name="resumeOnArrival">Whether to resume as soon as the jump finishes. If false, gameplay stays paused there until <see cref="ResumeFromSeek"/>.</param>
@@ -128,6 +228,7 @@ namespace osu.Game.Fork.Practice
             }
 
             PauseOverlay.Hide();
+            EndPrompt.Hide();
 
             this.resumeOnArrival = resumeOnArrival;
             SeekSession.SeekTo(Math.Clamp(time, GameplayClockContainer.StartTime, GameplayState.Beatmap.GetLastObjectTime()));
@@ -141,34 +242,80 @@ namespace osu.Game.Fork.Practice
             if (!SeekSession.IsActive || SeekSession.IsSeeking)
                 return;
 
-            resumeOnArrival = false;
-            SeekSession.Commit();
+            commit();
             Resume();
         }
+
+        /// <summary>
+        /// End the seek session where it is. A new section starts here.
+        /// </summary>
+        private void commit()
+        {
+            resumeOnArrival = false;
+            SeekSession.Commit();
+
+            double time = DrawableRuleset.FrameStableClock.CurrentTime;
+            failPoints.RemoveAll(t => t > time);
+            sectionStart = ScoreProcessor.HitEvents.Count;
+        }
+
+        // A seek session plays the run's own input as a replay. Esc should pause it, not leave the map.
+        protected override bool CanPauseWithReplayLoaded => SeekSession.IsActive;
+
+        public override bool Pause()
+        {
+            if (LoadedBeatmapSuccessfully && SeekSession.IsActive)
+            {
+                // A jump cannot stop half way. Esc does nothing until it ends, which takes a few seconds at most.
+                if (SeekSession.IsSeeking)
+                    return false;
+
+                commit();
+            }
+
+            return base.Pause();
+        }
+
+        // The cooldown stops pause buffering in scored runs. After a rewind it would block pausing until play passes the last pause again.
+        protected override double PauseCooldownDuration => IsPractice ? double.NegativeInfinity : base.PauseCooldownDuration;
+
+        #endregion
+
+        #region Keys
 
         public bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
         {
             if (!LoadedBeatmapSuccessfully)
                 return false;
 
-            // shortcut: a normal run turns into practice with no question asked. M5 asks first ("Switch this run to practice?").
             switch (e.Action)
             {
                 case GlobalAction.SeekReplayBackward:
-                    PracticeSeek(GameplayClockContainer.CurrentTime - SEEK_STEP, !scrubbing);
+                    usePracticeTool(() => PracticeSeek(GameplayClockContainer.CurrentTime - SEEK_STEP, !scrubbing));
                     return true;
 
                 case GlobalAction.SeekReplayForward:
-                    PracticeSeek(GameplayClockContainer.CurrentTime + SEEK_STEP, !scrubbing);
+                    usePracticeTool(() => PracticeSeek(GameplayClockContainer.CurrentTime + SEEK_STEP, !scrubbing));
                     return true;
 
                 case GlobalAction.PracticeScrub:
                     if (!e.Repeat)
                     {
                         scrubbing = true;
+                        lastMarkerState = -1;
                         ScrubOverlay.Show();
                     }
 
+                    return true;
+
+                case GlobalAction.PracticeQuickSave:
+                    if (!e.Repeat)
+                        saveCheckpoint(GameplayClockContainer.CurrentTime);
+                    return true;
+
+                case GlobalAction.PracticeQuickLoad:
+                    if (!e.Repeat)
+                        loadCheckpoint();
                     return true;
             }
 
@@ -187,6 +334,165 @@ namespace osu.Game.Fork.Practice
                 resumeOnArrival = true;
         }
 
+        protected override bool OnKeyDown(KeyDownEvent e)
+        {
+            // With Shift held for scrubbing, bindings without Shift (Left, Right, comma, period) do not match. Handle those keys here.
+            if (scrubbing && e.ShiftPressed && LoadedBeatmapSuccessfully)
+            {
+                double? step = e.Key switch
+                {
+                    Key.Left => -SEEK_STEP,
+                    Key.Right => SEEK_STEP,
+                    Key.Comma => -FRAME_STEP,
+                    Key.Period => FRAME_STEP,
+                    _ => null,
+                };
+
+                if (step is double amount)
+                {
+                    usePracticeTool(() => PracticeSeek(GameplayClockContainer.CurrentTime + amount, !scrubbing));
+                    return true;
+                }
+            }
+
+            return base.OnKeyDown(e);
+        }
+
+        #endregion
+
+        #region Checkpoints
+
+        private void saveCheckpoint(double time)
+        {
+            Checkpoint = Math.Clamp(time, GameplayClockContainer.StartTime, GameplayState.Beatmap.GetLastObjectTime());
+            Attempts = 0;
+            CheckpointStore.Save(storage, profileId, beatmapMD5, Checkpoint.Value);
+            showToast($@"Checkpoint saved at {PracticeHud.FormatTime(Checkpoint.Value)}");
+        }
+
+        private void loadCheckpoint()
+        {
+            if (Checkpoint is not double time)
+            {
+                showToast(@"No checkpoint yet. Quick save first (F6).");
+                return;
+            }
+
+            usePracticeTool(() =>
+            {
+                Attempts++;
+                PracticeSeek(time, !scrubbing);
+            });
+        }
+
+        private void showToast(LocalisableString text)
+        {
+            toast.Text = text;
+            toast.FadeIn(100).Then().Delay(1500).FadeOut(300);
+        }
+
+        #endregion
+
+        #region Practice rules
+
+        /// <summary>
+        /// Use a practice tool. In a normal run, first ask whether to turn the run into practice.
+        /// </summary>
+        private void usePracticeTool(Action tool)
+        {
+            if (IsPractice)
+            {
+                tool();
+                return;
+            }
+
+            if (GameplayState.HasFailed || PracticePrompt.State.Value == Visibility.Visible)
+                return;
+
+            bool wasPaused = GameplayClockContainer.IsPaused.Value;
+
+            if (IsResuming)
+            {
+                DrawableRuleset.CancelResume();
+                IsResuming = false;
+                wasPaused = false;
+            }
+
+            GameplayClockContainer.Stop();
+
+            PracticePrompt.SetButtons(
+                (@"Practice this run (it won't be saved)", colours.Green, () =>
+                {
+                    becomePractice();
+                    tool();
+                }),
+                (@"Keep playing", colours.Yellow, () =>
+                {
+                    if (!wasPaused)
+                        Resume();
+                }));
+            PracticePrompt.Show();
+        }
+
+        private void becomePractice()
+        {
+            if (IsPractice)
+                return;
+
+            IsPractice = true;
+            sectionStart = ScoreProcessor.HitEvents.Count;
+            PracticeHud.FadeIn(200);
+
+            // A practice run stays in gameplay when the last object is judged, and its score is never imported.
+            Configuration.ShowResults = false;
+        }
+
+        // Health still drains and shows, but lazer's fail sequence cannot be rewound, so it never starts.
+        protected override bool CheckModsAllowFailure() => !IsPractice && base.CheckModsAllowFailure();
+
+        protected override Task ImportScore(Score score) => IsPractice ? Task.CompletedTask : base.ImportScore(score);
+
+        protected override ResultsScreen CreateResults(ScoreInfo score) => IsPractice
+            // The practice score is not in the database, and its replay is the edited timeline.
+            ? new SoloResultsScreen(score) { AllowRetry = true, AllowWatchingReplay = false, IsLocalPlay = true }
+            : base.CreateResults(score);
+
+        private void updateEndPrompt()
+        {
+            bool show = IsPractice && !resultsRequested && ScoreProcessor.HasCompleted.Value && !SeekSession.IsActive && !GameplayState.HasFailed;
+
+            if (show == endPromptShown)
+                return;
+
+            endPromptShown = show;
+
+            if (!show)
+            {
+                EndPrompt.Hide();
+                return;
+            }
+
+            var buttons = new List<(LocalisableString, Color4, Action)>();
+
+            if (Checkpoint != null)
+                buttons.Add((@"Load checkpoint", colours.Green, loadCheckpoint));
+
+            buttons.Add((@"Play from the start", colours.Yellow, () => PracticeSeek(GameplayClockContainer.StartTime, true)));
+            buttons.Add((@"Results", colours.Blue, showResults));
+
+            EndPrompt.SetButtons(buttons.ToArray());
+            EndPrompt.Show();
+        }
+
+        private void showResults()
+        {
+            resultsRequested = true;
+            Configuration.ShowResults = true;
+            ProgressToResultsNow();
+        }
+
+        #endregion
+
         protected override void Update()
         {
             base.Update();
@@ -201,40 +507,21 @@ namespace osu.Game.Fork.Practice
             // Resume here, before children update: the recorder that Commit adds must load before the next input arrives.
             if (resumeOnArrival)
                 ResumeFromSeek();
-        }
 
-        // spike: one hard-coded key that rewinds 30 s and resumes. Replace with the practice key bindings in M5.
-        protected override bool OnKeyDown(KeyDownEvent e)
-        {
-            if (e.Key == Key.F7 && !e.Repeat && LoadedBeatmapSuccessfully)
+            updateEndPrompt();
+
+            var events = ScoreProcessor.HitEvents;
+
+            if (IsPractice && !SeekSession.IsActive)
+                PracticeHud.ShowSection(events.Skip(Math.Min(sectionStart, events.Count)).ToList(), ScoreProcessor.GetBaseScoreForResult, Checkpoint, Attempts);
+
+            int markerState = HashCode.Combine(events.Count, Checkpoint, failPoints.Count, SeekSession.SkippedRanges.Count);
+
+            if (scrubbing && markerState != lastMarkerState)
             {
-                PracticeSeek(GameplayClockContainer.CurrentTime - 30000, true);
-                return true;
+                lastMarkerState = markerState;
+                ScrubOverlay.SetMarkers(Checkpoint, events.Where(e => e.Result == HitResult.Miss).Select(e => e.HitObject.StartTime), failPoints, SeekSession.SkippedRanges);
             }
-
-            return base.OnKeyDown(e);
         }
-
-        #endregion
-
-        #region Practice rules
-
-        private void becomePractice()
-        {
-            if (IsPractice)
-                return;
-
-            IsPractice = true;
-
-            // A practice run stays in gameplay when the last object is judged, and its score is never imported.
-            Configuration.ShowResults = false;
-        }
-
-        // Health still drains and shows, but lazer's fail sequence cannot be rewound, so it never starts.
-        protected override bool CheckModsAllowFailure() => !IsPractice && base.CheckModsAllowFailure();
-
-        protected override Task ImportScore(Score score) => IsPractice ? Task.CompletedTask : base.ImportScore(score);
-
-        #endregion
     }
 }

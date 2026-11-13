@@ -34,8 +34,8 @@ namespace osu.Game.Tests.Fork.Practice
             AddUntilStep("graph shown", () => overlay.IsPresent);
             AddAssert("normal run until a click", () => !Player.IsPractice);
 
-            // The graph runs from the first circle (500 ms) to the last (5,000 ms).
-            clickAt(0.2f); // 1,400 ms
+            // The graph runs from the first circle (500 ms) to the last (5,000 ms). The first click in a normal run asks first.
+            clickAt(0.2f, true); // 1,400 ms
             AddAssert("two circles judged", () => CaptureState().Statistics, () => Is.EqualTo("Great: 2"));
 
             clickAt(0.8f); // 4,100 ms: circles 4 to 6 were never played
@@ -45,19 +45,30 @@ namespace osu.Game.Tests.Fork.Practice
             AddAssert("own attempt again", () => CaptureState().Statistics, () => Is.EqualTo("Great: 2"));
             AddAssert("still paused", () => Player.GameplayClockContainer.IsPaused.Value);
 
+            AddStep("right-click the graph at 50%", () =>
+            {
+                InputManager.MoveMouseTo(overlay.ToScreenSpace(new Vector2(overlay.DrawWidth * 0.5f, overlay.DrawHeight / 2)));
+                InputManager.Click(MouseButton.Right);
+            });
+            AddAssert("checkpoint set there", () => Player.Checkpoint, () => Is.EqualTo(2750).Within(1));
+            AddAssert("still at the click before", () => Player.GameplayClockContainer.CurrentTime, () => Is.EqualTo(1400).Within(1));
+
             AddStep("release the scrub key", () => InputManager.ReleaseKey(Key.LShift));
             WaitForResume();
             AddUntilStep("graph hidden", () => overlay.IsPresent, () => Is.False);
             AddAssert("run is practice", () => Player.IsPractice);
         }
 
-        private void clickAt(float x)
+        private void clickAt(float x, bool asksFirst = false)
         {
             AddStep($"click the graph at {x:P0}", () =>
             {
                 InputManager.MoveMouseTo(overlay.ToScreenSpace(new Vector2(overlay.DrawWidth * x, overlay.DrawHeight / 2)));
                 InputManager.Click(MouseButton.Left);
             });
+
+            if (asksFirst)
+                AcceptPracticePrompt();
 
             double target = ObjectTime(0) + x * (ObjectTime(OBJECT_COUNT - 1) - ObjectTime(0));
             AddUntilStep("wait for the jump", () => Player.SeekSession.IsActive && !Player.SeekSession.IsSeeking

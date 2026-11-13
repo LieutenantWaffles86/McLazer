@@ -35,6 +35,8 @@ namespace osu.Game.Tests.Fork.Practice
 
         protected const int OBJECT_COUNT = 10;
 
+        protected const string TEST_MD5 = @"mclazer-practice-test";
+
         protected TestPracticePlayer Player = null!;
 
         protected InputBot Bot = null!;
@@ -46,7 +48,8 @@ namespace osu.Game.Tests.Fork.Practice
             // Wide hit windows (a miss is judged 200 ms after a circle), because headless tests step 33 ms at a time.
             var beatmap = new Beatmap
             {
-                BeatmapInfo = { Ruleset = ruleset },
+                // Checkpoints are saved per map MD5.
+                BeatmapInfo = { Ruleset = ruleset, MD5Hash = TEST_MD5 },
                 Difficulty = { OverallDifficulty = 0 },
             };
 
@@ -122,19 +125,23 @@ namespace osu.Game.Tests.Fork.Practice
             });
         }
 
-        protected void LoadPlayer(params Mod[] mods)
+        protected void LoadPlayer(params Mod[] mods) => LoadPlayer(() => new TestPracticePlayer(), mods);
+
+        protected void LoadPlayer(Func<TestPracticePlayer> createPlayer, params Mod[] mods)
         {
             AddStep("load player", () =>
             {
                 if (Stack.CurrentScreen is Player)
                     Stack.Exit();
 
+                gameplayStarted = false;
+
                 var ruleset = CreateRuleset();
                 Ruleset.Value = ruleset.RulesetInfo;
                 Beatmap.Value = CreateWorkingBeatmap(CreateBeatmap(ruleset.RulesetInfo));
                 SelectedMods.Value = mods;
 
-                LoadScreen(Player = CreatePlayer());
+                LoadScreen(Player = createPlayer());
                 Bot.Player = Player;
             });
 
@@ -147,8 +154,6 @@ namespace osu.Game.Tests.Fork.Practice
                 gameplayStarted = true;
             });
         }
-
-        protected virtual TestPracticePlayer CreatePlayer() => new TestPracticePlayer();
 
         /// <summary>
         /// Run an action during live play, on the first frame at or after a gameplay time.
@@ -185,6 +190,16 @@ namespace osu.Game.Tests.Fork.Practice
         protected void WaitForSeek() => AddUntilStep("wait for seek to finish", () => Player.SeekSession.IsActive && !Player.SeekSession.IsSeeking);
 
         protected void WaitForResume() => AddUntilStep("wait for resume", () => !Player.SeekSession.IsActive && !Player.GameplayClockContainer.IsPaused.Value);
+
+        /// <summary>
+        /// Answer "practice this run?" with yes.
+        /// </summary>
+        protected void AcceptPracticePrompt()
+        {
+            AddUntilStep("practice prompt shown", () => Player.PracticePrompt.State.Value, () => Is.EqualTo(osu.Framework.Graphics.Containers.Visibility.Visible));
+            AddAssert("gameplay paused while asking", () => Player.GameplayClockContainer.IsPaused.Value);
+            AddStep("practice this run", () => Player.PracticePrompt.Buttons.First().TriggerClick());
+        }
 
         /// <summary>
         /// Everything about the run's score at the current frame.
@@ -234,6 +249,16 @@ namespace osu.Game.Tests.Fork.Practice
             public new HealthProcessor HealthProcessor => base.HealthProcessor;
 
             public new SeekSession SeekSession => base.SeekSession;
+
+            public new ScrubOverlay ScrubOverlay => base.ScrubOverlay;
+
+            public new PracticeHud PracticeHud => base.PracticeHud;
+
+            public new PracticeMenuOverlay PracticePrompt => base.PracticePrompt;
+
+            public new PracticeMenuOverlay EndPrompt => base.EndPrompt;
+
+            public new PauseOverlay PauseOverlay => base.PauseOverlay;
 
             public new HUDOverlay HUDOverlay => base.HUDOverlay;
 

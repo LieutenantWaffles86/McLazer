@@ -233,10 +233,12 @@ namespace osu.Game.Input.Bindings
             new KeyBinding(new[] { InputKey.Control, InputKey.H }, GlobalAction.ToggleReplaySettings),
         };
 
-        // McLazer: practice runs. Shift is McOsu's scrub key.
+        // McLazer: practice runs. Shift, F6 and F7 are McOsu's keys. Listed before the overlay bindings, so F6 does not also open now playing.
         private static IEnumerable<KeyBinding> practiceKeyBindings => new[]
         {
             new KeyBinding(InputKey.Shift, GlobalAction.PracticeScrub),
+            new KeyBinding(InputKey.F6, GlobalAction.PracticeQuickSave),
+            new KeyBinding(InputKey.F7, GlobalAction.PracticeQuickLoad),
         };
 
         private static IEnumerable<KeyBinding> songSelectKeyBindings => new[]
@@ -650,6 +652,12 @@ namespace osu.Game.Input.Bindings
         // McLazer: practice actions. Saved bindings store the number, so fork actions start at 10,000 and upstream's additions never shift them.
         [Description("Scrub (hold)")]
         PracticeScrub = 10000,
+
+        [Description("Quick save checkpoint")]
+        PracticeQuickSave = 10001,
+
+        [Description("Quick load checkpoint")]
+        PracticeQuickLoad = 10002,
     }
 
     public enum GlobalActionCategory

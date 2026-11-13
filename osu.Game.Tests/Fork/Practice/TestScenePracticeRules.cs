@@ -7,6 +7,7 @@ using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Extensions;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
 using osu.Framework.Testing;
@@ -125,6 +126,31 @@ namespace osu.Game.Tests.Fork.Practice
 
             AddStep("exit", () => Player.Exit());
             AddUntilStep("player exited", () => !Player.IsCurrentScreen());
+            AddAssert("no score saved", () => savedScores, () => Is.Zero);
+        }
+
+        [Test]
+        public void TestEndPrompt()
+        {
+            LoadPlayer(new OsuModNoFail());
+
+            AddStep("skip to the last object", () => Player.PracticeSeek(lastObjectTime, true));
+            WaitForResume();
+            AddUntilStep("run completed", () => Player.ScoreProcessor.HasCompleted.Value);
+            AddUntilStep("end prompt shown", () => Player.EndPrompt.State.Value, () => Is.EqualTo(Visibility.Visible));
+            AddAssert("no checkpoint to load", () => Player.EndPrompt.Buttons.Count, () => Is.EqualTo(2));
+
+            AddStep("play from the start", () => Player.EndPrompt.Buttons[0].TriggerClick());
+            AddUntilStep("end prompt hidden", () => Player.EndPrompt.State.Value, () => Is.EqualTo(Visibility.Hidden));
+            AddUntilStep("completion undone", () => !Player.ScoreProcessor.HasCompleted.Value);
+            WaitForResume();
+
+            AddStep("skip to the last object", () => Player.PracticeSeek(lastObjectTime, true));
+            WaitForResume();
+            AddUntilStep("end prompt shown", () => Player.EndPrompt.State.Value, () => Is.EqualTo(Visibility.Visible));
+
+            AddStep("results", () => Player.EndPrompt.Buttons[^1].TriggerClick());
+            AddUntilStep("results shown", () => Player.GetChildScreen() is ResultsScreen);
             AddAssert("no score saved", () => savedScores, () => Is.Zero);
         }
     }

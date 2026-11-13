@@ -134,8 +134,9 @@ namespace osu.Game.Tests.Fork.Offline
             AddAssert("local scope is selected", () => Game.ChildrenOfType<ShearedDropdown<BeatmapLeaderboardScope>>().Single().Current.Value, () => Is.EqualTo(BeatmapLeaderboardScope.Local));
         }
 
-        [Test]
-        public void TestPlayFromSongSelect()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void TestPlayFromSongSelect(bool practice)
         {
             Player? player = null;
             SoloSongSelect songSelect = null!;
@@ -146,6 +147,9 @@ namespace osu.Game.Tests.Fork.Offline
             AddStep("import beatmap", () => BeatmapImportHelper.LoadQuickOszIntoOsu(Game).WaitSafely());
             AddUntilStep("wait for selection", () => !Game.Beatmap.IsDefault);
 
+            if (practice)
+                AddStep("turn on practice", () => Game.ChildrenOfType<FooterButtonPractice>().Single().TriggerClick());
+
             AddStep("press enter", () => InputManager.Key(Key.Enter));
             AddUntilStep("wait for player", () =>
             {
@@ -154,6 +158,7 @@ namespace osu.Game.Tests.Fork.Offline
             });
 
             AddAssert("player is the practice player", () => player, Is.InstanceOf<PracticePlayer>);
+            AddAssert($"run is {(practice ? "practice" : "normal")}", () => ((PracticePlayer)player!).IsPractice, () => Is.EqualTo(practice));
             AddUntilStep("gameplay clock running", () => player.ChildrenOfType<GameplayClockContainer>().Single().IsRunning);
             AddAssert("still offline", () => Game.API.State.Value, () => Is.EqualTo(APIState.Offline));
         }
