@@ -139,3 +139,11 @@ Fork code: `osu.Game/Fork/Stats/` (`LocalStats`, `LocalProfileOverlay`), score s
 | --- | --- | --- |
 | `osu.Game/Online/Leaderboards/LeaderboardManager.cs` | New `ShowAllProfiles`. When set, the Local query does not filter by the active profile; a change refetches. | The "All profiles" leaderboard. |
 | `osu.Game/Screens/Select/BeatmapDetailsArea.Header.cs` | Offline only: an "All profiles" toggle bound to `LeaderboardManager.ShowAllProfiles`, in place of the one-item scope dropdown. | Same. |
+
+## M7: coverage
+
+Tests: `osu.Game.Tests/Fork/Practice/TestSceneSeekWithMods.cs` rewinds with HR, DT, HT, HD, FL, Adaptive Speed, Wind Up, Wind Down, Magnetised and Repel.
+
+| File | What changed | Why |
+| --- | --- | --- |
+| `osu.Game.Rulesets.Osu/Mods/OsuModRepel.cs`, `osu.Game.Rulesets.Osu/Mods/OsuModMagnetised.cs` | Objects do not move in a frame where gameplay time stands still or runs backwards. | Damping with negative time pushed objects away without limit during rewinds. Repel also crashed with a NaN position when the cursor sat exactly on an object in a frame with no time. |

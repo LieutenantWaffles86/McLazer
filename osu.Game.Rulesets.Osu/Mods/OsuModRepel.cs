@@ -88,6 +88,11 @@ namespace osu.Game.Rulesets.Osu.Mods
         {
             double dampLength = Vector2.Distance(hitObject.Position, cursorPos) / (0.04 * RepulsionStrength.Value + 0.04);
 
+            // McLazer: objects hold still while time stands still or runs backwards (rewinds). Damping with negative time pushes them away without limit,
+            // and with no time it gives NaN when the cursor sits exactly on the object.
+            if (clock.ElapsedFrameTime <= 0)
+                return;
+
             float x = (float)Interpolation.DampContinuously(hitObject.X, destination.X, dampLength, clock.ElapsedFrameTime);
             float y = (float)Interpolation.DampContinuously(hitObject.Y, destination.Y, dampLength, clock.ElapsedFrameTime);
 
