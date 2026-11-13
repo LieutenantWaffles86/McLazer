@@ -16,10 +16,7 @@ using osu.Game.Fork.Offline;
 using osu.Game.Fork.Profiles;
 using osu.Game.Online;
 using osu.Game.Online.API;
-using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
-using osu.Game.Screens;
-using osu.Game.Screens.Menu;
 using osu.Game.Users;
 
 namespace osu.Game.Fork
@@ -44,22 +41,9 @@ namespace osu.Game.Fork
 
         public ProfileStore Profiles { get; private set; } = null!;
 
-        private bool profilePickerShown;
-
         // shortcut: clicking a player does nothing. The online profile overlay only shows failed requests offline. M6 adds a local profile screen.
         public override void ShowUser(IUser user)
         {
-        }
-
-        protected override void ScreenChanged(IOsuScreen? current, IOsuScreen? newScreen)
-        {
-            base.ScreenChanged(current, newScreen);
-
-            // With more than one profile, ask who is playing. The main menu is the first screen that allows overlays.
-            if (newScreen is MainMenu && !profilePickerShown && Profiles.Profiles.Count > 1)
-                Schedule(() => Dependencies.Get<LoginOverlay>().Show());
-
-            profilePickerShown |= newScreen is MainMenu;
         }
 
         /// <summary>

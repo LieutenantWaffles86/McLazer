@@ -335,7 +335,8 @@ namespace osu.Game.Screens.Menu
 
         private void displayLoginIfApplicable()
         {
-            if (loginDisplayed.Value) return;
+            // McLazer: the profile picker only opens from the toolbar. The active profile plays until the player switches.
+            if (loginDisplayed.Value || api is OfflineAPIAccess) return;
 
             if (!api.IsLoggedIn || api.State.Value == APIState.RequiresSecondFactorAuth)
             {

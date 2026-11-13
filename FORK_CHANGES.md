@@ -94,6 +94,7 @@ Profiles live in `profiles.json` in McLazer's own folder. The active profile is 
 | `osu.Game/Overlays/LoginOverlay.cs` | Shows `ProfilePanel` instead of `LoginPanel`. | The toolbar user button opens the profile picker. There is no login. |
 | `osu.Game/Online/Leaderboards/LeaderboardManager.cs` | The Local query also matches `User.OnlineID` to the local user, and a change of local user refetches. | Each profile sees only its own scores. |
 | `osu.Game/OsuGame.cs` | `ShowUser` is virtual. `McLazerGame` overrides it to do nothing. | Clicking a player opened the online profile overlay, which only shows failed requests. |
+| `osu.Game/Screens/Menu/MainMenu.cs` | The login overlay does not open on the first logo click. | The profile picker opens only from the toolbar. The active profile plays until the player switches. |
 
 ## M4: seek engine
 
