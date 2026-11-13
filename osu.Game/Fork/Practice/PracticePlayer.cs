@@ -2,12 +2,15 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
+using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
@@ -45,6 +48,13 @@ namespace osu.Game.Fork.Practice
 
         protected SeekSession SeekSession { get; private set; } = null!;
 
+        protected ScrubOverlay ScrubOverlay { get; private set; } = null!;
+
+        /// <summary>
+        /// Whether the scrub key is held. Seeks then stay at their target, so the player can scrub over their own attempt, and resume when it is released.
+        /// </summary>
+        private bool scrubbing;
+
         private bool resumeOnArrival;
         private OsuSpriteText seekingText = null!;
         private double seekingFor;
@@ -69,6 +79,29 @@ namespace osu.Game.Fork.Practice
                 Font = OsuFont.GetFont(size: 30, weight: FontWeight.Bold),
                 Alpha = 0,
             });
+
+            var hitObjects = GameplayState.Beatmap.HitObjects;
+            AddInternal(ScrubOverlay = new ScrubOverlay(calculateDifficulties(), hitObjects.FirstOrDefault()?.StartTime ?? 0, GameplayState.Beatmap.GetLastObjectTime(),
+                () => DrawableRuleset.FrameStableClock.CurrentTime, time =>
+                {
+                    // The overlay still takes clicks while it fades out. Without the key held, nothing would resume after the jump.
+                    if (scrubbing)
+                        PracticeSeek(time);
+                }));
+        }
+
+        private IReadOnlyList<(Type Skill, (double Time, double Difficulty)[] Objects)> calculateDifficulties()
+        {
+            try
+            {
+                return GameplayState.Ruleset.CreateDifficultyCalculator(Beatmap.Value).CalculateObjectDifficulties(GameplayState.Mods);
+            }
+            catch (Exception e)
+            {
+                // The graph is a guide. Scrubbing works without it.
+                Logger.Error(e, @"Could not calculate the strain graph.");
+                return Array.Empty<(Type, (double, double)[])>();
+            }
         }
 
         // With no token, SubmittingPlayer skips score submission. Everything it does locally still runs.
@@ -122,11 +155,20 @@ namespace osu.Game.Fork.Practice
             switch (e.Action)
             {
                 case GlobalAction.SeekReplayBackward:
-                    PracticeSeek(GameplayClockContainer.CurrentTime - SEEK_STEP, true);
+                    PracticeSeek(GameplayClockContainer.CurrentTime - SEEK_STEP, !scrubbing);
                     return true;
 
                 case GlobalAction.SeekReplayForward:
-                    PracticeSeek(GameplayClockContainer.CurrentTime + SEEK_STEP, true);
+                    PracticeSeek(GameplayClockContainer.CurrentTime + SEEK_STEP, !scrubbing);
+                    return true;
+
+                case GlobalAction.PracticeScrub:
+                    if (!e.Repeat)
+                    {
+                        scrubbing = true;
+                        ScrubOverlay.Show();
+                    }
+
                     return true;
             }
 
@@ -135,6 +177,14 @@ namespace osu.Game.Fork.Practice
 
         public void OnReleased(KeyBindingReleaseEvent<GlobalAction> e)
         {
+            if (e.Action != GlobalAction.PracticeScrub || !LoadedBeatmapSuccessfully)
+                return;
+
+            scrubbing = false;
+            ScrubOverlay.Hide();
+
+            if (SeekSession.IsActive)
+                resumeOnArrival = true;
         }
 
         protected override void Update()

@@ -36,6 +36,7 @@ namespace osu.Game.Overlays.Settings.Sections.Input
                 {
                     new GlobalKeyBindingsSubsection(CommonStrings.General, GlobalActionCategory.InGame),
                     new GlobalKeyBindingsSubsection(InputSettingsStrings.ReplaySection, GlobalActionCategory.Replay),
+                    new GlobalKeyBindingsSubsection(@"Practice", GlobalActionCategory.Practice), // McLazer
                 }
             });
 

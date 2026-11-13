@@ -91,6 +91,31 @@ namespace osu.Game.Rulesets.Difficulty
         }
 
         /// <summary>
+        /// McLazer: each skill's difficulty for every object, at the object's time in the map, for the practice scrub graph.
+        /// </summary>
+        public IReadOnlyList<(Type Skill, (double Time, double Difficulty)[] Objects)> CalculateObjectDifficulties([NotNull] IEnumerable<Mod> mods, CancellationToken cancellationToken = default)
+        {
+            preProcess(mods, cancellationToken);
+
+            if (!Beatmap.HitObjects.Any())
+                return Array.Empty<(Type, (double, double)[])>();
+
+            var skills = CreateSkills(Beatmap, playableMods);
+            var objects = getDifficultyHitObjects().ToArray();
+
+            foreach (var hitObject in objects)
+            {
+                foreach (var skill in skills)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    skill.Process(hitObject);
+                }
+            }
+
+            return skills.Select(s => (s.GetType(), objects.Zip(s.GetObjectDifficulties(), (o, d) => (o.BaseObject.StartTime, d)).ToArray())).ToArray();
+        }
+
+        /// <summary>
         /// Calculates the difficulty of the beatmap with no mods applied and returns a set of <see cref="TimedDifficultyAttributes"/> representing the difficulty at every relevant time value in the beatmap.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>

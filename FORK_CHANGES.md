@@ -107,3 +107,15 @@ Left and Right seek 5 s through the replay seek bindings (`GlobalAction.SeekRepl
 | `osu.Game/Screens/Play/Player.cs` | New virtual `SeekingAllowed`, by default `DrawableRuleset.HasReplayLoaded`. | `PracticePlayer` turns progress bar seeking off. The bar is optional and skins can leave it out, so seeks come from keys only. Upstream would turn it on during every seek session, because a replay is loaded then. |
 | `osu.Game/Screens/Play/HUD/SongProgress.cs` | `Interactive` binds to `player.SeekingAllowed` instead of `drawableRuleset.HasReplayLoaded`. | Same. Upstream players keep the old behaviour through the default. |
 | `osu.Game/Rulesets/UI/ReplayRecorder.cs` | `RecordFrame` finds its input manager itself if `LoadComplete` has not run yet. | After a seek, the recorder is attached mid-run. A hit in that same frame recorded a frame before `LoadComplete` and crashed. |
+
+## M5: practice UI
+
+Fork code: `osu.Game/Fork/Practice/` (`ScrubOverlay`). Tests: `osu.Game.Tests/Fork/Practice/TestSceneScrub.cs`.
+
+Holding Shift shows the map's difficulty graph (aim and speed), as in McOsu. Clicks jump and hold there; releasing Shift resumes.
+
+| File | What changed | Why |
+| --- | --- | --- |
+| `osu.Game/Input/Bindings/GlobalActionContainer.cs` | New `GlobalActionCategory.Practice` and `GlobalAction.PracticeScrub = 10000`, bound to Shift. | The scrub key. Fork actions start at 10,000, so upstream's new actions never shift their saved numbers. |
+| `osu.Game/Overlays/Settings/Sections/Input/KeyBindingPanel.cs` | A "Practice" subsection under gameplay. | The scrub key can be rebound. |
+| `osu.Game/Rulesets/Difficulty/DifficultyCalculator.cs` | New `CalculateObjectDifficulties`: each skill's difficulty for every object. | The scrub graph. The skills are only reachable from inside the calculator. |

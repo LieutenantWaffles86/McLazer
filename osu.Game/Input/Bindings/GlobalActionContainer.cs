@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using osu.Framework.Input;
 using osu.Framework.Input.Bindings;
@@ -39,6 +40,7 @@ namespace osu.Game.Input.Bindings
                                                                        .Concat(replayKeyBindings)
                                                                        .Concat(songSelectKeyBindings)
                                                                        .Concat(audioControlKeyBindings)
+                                                                       .Concat(practiceKeyBindings) // McLazer
                                                                        // Overlay bindings may conflict with more local cases like the editor so they are checked last.
                                                                        // It has generally been agreed on that local screens like the editor should have priority,
                                                                        // based on such usages potentially requiring a lot more key bindings that may be "shared" with global ones.
@@ -71,6 +73,9 @@ namespace osu.Game.Input.Bindings
 
                 case GlobalActionCategory.EditorTestPlay:
                     return editorTestPlayKeyBindings;
+
+                case GlobalActionCategory.Practice: // McLazer
+                    return practiceKeyBindings;
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(category), category, $"Unexpected {nameof(GlobalActionCategory)}");
@@ -226,6 +231,12 @@ namespace osu.Game.Input.Bindings
             new KeyBinding(InputKey.Comma, GlobalAction.StepReplayBackward),
             new KeyBinding(InputKey.Period, GlobalAction.StepReplayForward),
             new KeyBinding(new[] { InputKey.Control, InputKey.H }, GlobalAction.ToggleReplaySettings),
+        };
+
+        // McLazer: practice runs. Shift is McOsu's scrub key.
+        private static IEnumerable<KeyBinding> practiceKeyBindings => new[]
+        {
+            new KeyBinding(InputKey.Shift, GlobalAction.PracticeScrub),
         };
 
         private static IEnumerable<KeyBinding> songSelectKeyBindings => new[]
@@ -635,6 +646,10 @@ namespace osu.Game.Input.Bindings
 
         [LocalisableDescription(typeof(GlobalActionKeyBindingStrings), nameof(GlobalActionKeyBindingStrings.TakeAndUploadScreenshot))]
         TakeAndUploadScreeshot,
+
+        // McLazer: practice actions. Saved bindings store the number, so fork actions start at 10,000 and upstream's additions never shift them.
+        [Description("Scrub (hold)")]
+        PracticeScrub = 10000,
     }
 
     public enum GlobalActionCategory
@@ -647,5 +662,6 @@ namespace osu.Game.Input.Bindings
         AudioControl,
         Overlays,
         EditorTestPlay,
+        Practice, // McLazer
     }
 }
