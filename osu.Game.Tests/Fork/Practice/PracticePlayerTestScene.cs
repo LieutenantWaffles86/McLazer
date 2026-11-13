@@ -252,7 +252,7 @@ namespace osu.Game.Tests.Fork.Practice
 
             public new ScrubOverlay ScrubOverlay => base.ScrubOverlay;
 
-            public new PracticeHud PracticeHud => base.PracticeHud;
+            public new SectionScore SectionScore => base.SectionScore;
 
             public new PracticeMenuOverlay PracticePrompt => base.PracticePrompt;
 

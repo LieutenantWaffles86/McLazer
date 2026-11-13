@@ -475,6 +475,11 @@ namespace osu.Game.Screens.Play
             }
         };
 
+        /// <summary>
+        /// McLazer: the score processor the HUD shows.
+        /// </summary>
+        protected virtual ScoreProcessor CreateHUDScoreProcessor() => ScoreProcessor;
+
         private Drawable createOverlayComponents()
         {
             var container = new Container
@@ -483,7 +488,12 @@ namespace osu.Game.Screens.Play
                 Children = new[]
                 {
                     DimmableStoryboard.OverlayLayerContainer.CreateProxy(),
-                    HUDOverlay = new HUDOverlay(DrawableRuleset, GameplayState.Mods, Configuration)
+                    // McLazer: the HUD can show a different score processor than the one that scores the run.
+                    new osu.Game.Tests.Visual.DependencyProvidingContainer
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        CachedDependencies = new (Type, object)[] { (typeof(ScoreProcessor), CreateHUDScoreProcessor()) },
+                        Child = HUDOverlay = new HUDOverlay(DrawableRuleset, GameplayState.Mods, Configuration)
                     {
                         HoldToQuit =
                         {
@@ -500,6 +510,7 @@ namespace osu.Game.Screens.Play
                         },
                         Anchor = Anchor.Centre,
                         Origin = Anchor.Centre
+                    },
                     },
                     BreakOverlay = new BreakOverlay(ScoreProcessor)
                     {

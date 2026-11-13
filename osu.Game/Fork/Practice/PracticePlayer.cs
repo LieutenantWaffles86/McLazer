@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
@@ -77,7 +78,10 @@ namespace osu.Game.Fork.Practice
 
         protected ScrubOverlay ScrubOverlay { get; private set; } = null!;
 
-        protected PracticeHud PracticeHud { get; private set; } = null!;
+        /// <summary>
+        /// What the HUD shows: the current section.
+        /// </summary>
+        protected SectionScore SectionScore { get; private set; } = null!;
 
         /// <summary>
         /// Asks whether a normal run should become a practice run.
@@ -109,11 +113,6 @@ namespace osu.Game.Fork.Practice
         private double seekingFor;
 
         /// <summary>
-        /// The index in the hit events where the current section starts.
-        /// </summary>
-        private int sectionStart;
-
-        /// <summary>
         /// Times where health hit zero. A normal run would have failed there.
         /// </summary>
         private readonly List<double> failPoints = new List<double>();
@@ -121,7 +120,6 @@ namespace osu.Game.Fork.Practice
         private bool endPromptShown;
         private bool resultsRequested;
         private int lastMarkerState;
-        private int lastHudState;
 
         private int profileId;
         private string beatmapMD5 = string.Empty;
@@ -131,6 +129,9 @@ namespace osu.Game.Fork.Practice
         {
         }
 
+        // Called from the base load, before this class's own.
+        protected override ScoreProcessor CreateHUDScoreProcessor() => (SectionScore = new SectionScore(GameplayState, ScoreProcessor)).Processor;
+
         [BackgroundDependencyLoader]
         private void load()
         {
@@ -138,7 +139,6 @@ namespace osu.Game.Fork.Practice
                 return;
 
             AddInternal(SeekSession = new SeekSession(DrawableRuleset, GameplayClockContainer, GameplayState));
-            AddInternal(PracticeHud = new PracticeHud());
             AddInternal(seekingText = new OsuSpriteText
             {
                 Anchor = Anchor.Centre,
@@ -257,7 +257,7 @@ namespace osu.Game.Fork.Practice
 
             double time = DrawableRuleset.FrameStableClock.CurrentTime;
             failPoints.RemoveAll(t => t > time);
-            sectionStart = ScoreProcessor.HitEvents.Count;
+            SectionScore.Restart();
         }
 
         // A seek session plays the run's own input as a replay. Esc should pause it, not leave the map.
@@ -368,7 +368,7 @@ namespace osu.Game.Fork.Practice
             Checkpoint = Math.Clamp(time, GameplayClockContainer.StartTime, GameplayState.Beatmap.GetLastObjectTime());
             Attempts = 0;
             CheckpointStore.Save(storage, profileId, beatmapMD5, Checkpoint.Value);
-            showToast($@"Checkpoint saved at {PracticeHud.FormatTime(Checkpoint.Value)}");
+            showToast($@"Checkpoint saved at {formatTime(Checkpoint.Value)}");
         }
 
         private void loadCheckpoint()
@@ -382,9 +382,12 @@ namespace osu.Game.Fork.Practice
             usePracticeTool(() =>
             {
                 Attempts++;
+                showToast($@"Checkpoint {formatTime(time)}, attempt {Attempts}");
                 PracticeSeek(time, !scrubbing);
             });
         }
+
+        private static string formatTime(double time) => TimeSpan.FromMilliseconds(Math.Max(0, time)).ToString(@"m\:ss\.f", CultureInfo.InvariantCulture);
 
         private void showToast(LocalisableString text)
         {
@@ -441,8 +444,7 @@ namespace osu.Game.Fork.Practice
                 return;
 
             IsPractice = true;
-            sectionStart = ScoreProcessor.HitEvents.Count;
-            PracticeHud.FadeIn(200);
+            SectionScore.Restart();
 
             // A practice run stays in gameplay when the last object is judged, and its score is never imported.
             Configuration.ShowResults = false;
@@ -512,16 +514,6 @@ namespace osu.Game.Fork.Practice
             updateEndPrompt();
 
             var events = ScoreProcessor.HitEvents;
-
-            // Only when something changed: the section can hold every hit event of the map, and gameplay frames must not allocate for nothing.
-            int hudState = HashCode.Combine(events.Count, sectionStart, Checkpoint, Attempts);
-
-            if (IsPractice && !SeekSession.IsActive && hudState != lastHudState)
-            {
-                lastHudState = hudState;
-                PracticeHud.ShowSection(events.Skip(Math.Min(sectionStart, events.Count)).ToList(), ScoreProcessor.GetBaseScoreForResult, Checkpoint, Attempts);
-            }
-
             int markerState = HashCode.Combine(events.Count, Checkpoint, failPoints.Count, SeekSession.SkippedRanges.Count);
 
             if (scrubbing && markerState != lastMarkerState)

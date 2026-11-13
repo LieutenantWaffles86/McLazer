@@ -14,7 +14,7 @@ using osuTK.Input;
 namespace osu.Game.Tests.Fork.Practice
 {
     /// <summary>
-    /// Quick save and quick load, the practice HUD, and pausing during a jump.
+    /// Quick save and quick load, the section HUD, and pausing during a jump.
     /// </summary>
     [HeadlessTest]
     public partial class TestScenePracticeTools : PracticePlayerTestScene
@@ -59,7 +59,8 @@ namespace osu.Game.Tests.Fork.Practice
 
             // Live play goes on after the resume, so count undone judgements: circles 2 to 4.
             AddAssert("back at the checkpoint", () => reverted, () => Is.EqualTo(3));
-            AddAssert("practice HUD shown", () => Player.PracticeHud.Alpha, () => Is.GreaterThan(0));
+            // The HUD shows the section: everything but circles 0 and 1, from before the checkpoint.
+            AddAssert("section starts at the checkpoint", () => Player.ScoreProcessor.JudgedHits - Player.SectionScore.Processor.JudgedHits, () => Is.EqualTo(2));
 
             AddStep("bot hits everything", () => Bot.Skip.Clear());
             AtTime(GapAfter(4), "quick load again", () => InputManager.Key(Key.F7));
@@ -139,7 +140,6 @@ namespace osu.Game.Tests.Fork.Practice
             LoadPlayer(() => new TestPracticePlayer { StartAsPractice = true });
 
             AddAssert("practice from the start", () => Player.IsPractice);
-            AddAssert("practice HUD shown", () => Player.PracticeHud.Alpha, () => Is.GreaterThan(0));
 
             AtTime(GapAfter(0), "seek back", () => InputManager.Key(Key.Left));
             AddAssert("nothing asked", () => Player.PracticePrompt.State.Value, () => Is.EqualTo(Visibility.Hidden));
